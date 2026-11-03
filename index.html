@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nuqta</title>
+<meta name="description" content="Nuqta (نقطہ): a student-led publication on politics, culture, current affairs and the world around us.">
+<meta property="og:title" content="Nuqta">
+<meta property="og:description" content="Your doom scroll for politics, culture, current affairs and the world around.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%231f3ff0' stroke-width='4'%3E%3Cpath d='M24 17V5M18 11l6-6 6 6M31 24h12M37 18l6 6-6 6M24 31v12M18 37l6 6 6-6M17 24H5M11 18l-6 6 6 6'/%3E%3C/g%3E%3Ccircle cx='24' cy='24' r='5' fill='%23121216'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Caveat:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,700;1,6..72,400&family=Noto+Nastaliq+Urdu:wght@600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="extra.css">
+</head>
+<body>
+<div class="setup" id="setup" hidden><div class="wrap">The database isn't connected yet. Fill in <code>config.js</code> with your Supabase URL and anon key (see README).</div></div>
+<header class="top">
+  <div class="wrap top-in">
+    <button class="brand" data-act="nav" data-view="news" aria-label="Nuqta home">
+      <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="#1f3ff0" stroke-width="4" stroke-linecap="square"><path d="M24 17V5M18 11l6-6 6 6"/><path d="M31 24h12M37 18l6 6-6 6"/><path d="M24 31v12M18 37l6 6 6-6"/><path d="M17 24H5M11 18l-6 6 6 6"/></g><circle cx="24" cy="24" r="5" fill="#121216"/></svg>
+      <span class="brand-words"><span class="brand-name">NUQTA</span><span class="brand-ur" lang="ur">نقطہ</span></span>
+    </button>
+    <nav class="nav" aria-label="Sections" id="nav">
+      <button data-act="nav" data-view="news">Current Affairs</button>
+      <button data-act="nav" data-view="articles">Articles</button>
+      <button data-act="nav" data-view="forum">The Floor</button>
+    </nav>
+    <button class="acct" id="acct" data-act="account"><span><b>Sign in</b><span class="role">or create an account</span></span></button>
+  </div>
+</header>
+<div class="ticker" aria-label="Latest headlines">
+  <div class="ticker-in">
+    <div class="ticker-label"><span class="dot live" style="background:#fff"></span>LIVE DESK</div>
+    <div class="ticker-track" id="ticker"><span>Loading the latest from the desk</span></div>
+  </div>
+</div>
+
+<main id="view"></main>
+
+<footer id="join">
+  <div class="wrap cols4">
+    <div><h4>New to Nuqta?</h4><p><strong>Current Affairs</strong> is the daily news. <strong>Articles</strong> are opinion pieces by our writers. <strong>The Floor</strong> is where readers discuss both.</p></div>
+    <div><h4>Create an account</h4><ol><li>Tap <strong>Create account</strong> below.</li><li>Confirm your email from the link we send.</li><li>Sign in. You can now post, vote and submit articles.</li></ol><button class="fl" data-act="auth" data-mode="signup">Create account</button></div>
+    <div><h4>Write for Nuqta</h4><p>Anyone with an account can send in an article. An editor reviews it before it goes live.</p><button class="fl" data-act="nav" data-view="write">Submit an article</button></div>
+    <div><h4>House rules</h4><p>Argue with the idea, not the person. Abusive language is blocked automatically, and posts reported by three readers are hidden until an editor reviews them.</p><button class="fl" data-act="nav" data-view="newsroom" id="foot-ed" hidden>Editors' newsroom</button></div>
+  </div>
+  <div class="wrap base"><span>NUQTA <span class="ur" lang="ur">نقطہ</span> · Student-led publications club</span><span id="status">Connecting…</span></div>
+</footer>
+
+<div id="reader" class="reader" hidden></div>
+<div id="auth" class="modal" hidden></div>
+<div class="wipe" id="wipe" aria-hidden="true"><i></i><i></i><i></i></div>
+<div id="toast" class="toast" hidden role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

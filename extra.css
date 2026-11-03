@@ -1,0 +1,18 @@
+/* Sign-in dialog, account menu and setup notice */
+body{min-height:100vh}
+.modal{position:fixed;inset:0;z-index:85;background:rgba(18,18,22,.55);display:grid;place-items:center;padding:16px;animation:rise .25s var(--ease)}
+.modal-card{position:relative;width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--card);border:2px solid var(--ink);box-shadow:8px 8px 0 var(--blue);padding:24px 22px 20px}
+.modal-card h2{font-family:var(--f-display);font-weight:400;font-size:34px;line-height:1;margin-bottom:6px}
+.modal-card .sub{color:var(--ink-2);font-size:15px;margin-bottom:14px}
+.modal-card .x{position:absolute;right:10px;top:10px;border:2px solid var(--ink);background:none;width:32px;height:32px;font-family:var(--f-mono)}
+.modal-card form{display:grid;gap:10px}
+.modal-card label{display:grid;gap:4px;font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.modal-card input{border:1.5px solid var(--ink);background:var(--paper);padding:9px 10px;font-family:var(--f-body);font-size:16px;text-transform:none;letter-spacing:0}
+.modal-card .alt{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;font-family:var(--f-mono);font-size:12px}
+.modal-card .msg{font-family:var(--f-mono);font-size:12px;padding:8px 10px;border:1.5px solid currentColor}
+.modal-card .msg.err{color:var(--red)}
+.modal-card .msg.ok{color:var(--green)}
+.setup{background:var(--red);color:#fff;font-family:var(--f-mono);font-size:13px;padding-block:10px}
+.setup code{background:rgba(0,0,0,.2);padding:1px 5px}
+.team select{border:1.5px solid var(--ink);background:var(--paper);padding:4px 6px;font-family:var(--f-mono);font-size:12px}
+.post.hiddenpost{opacity:.6}
