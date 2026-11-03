@@ -28,7 +28,7 @@ The site is plain HTML/CSS/JS, hosted free on **GitHub Pages**. Data and account
 
 ### 3. Put it on GitHub Pages
 1. Create a new repository on GitHub, for example `nuqta`. It can be public.
-2. Upload every file in this folder (keep the `supabase` folder and the empty `.nojekyll` file).
+2. Upload every file in this folder (including the empty `.nojekyll` file).
 3. In the repository, go to **Settings → Pages → Build and deployment**. Set Source to *Deploy from a branch*, Branch to `main` and folder `/ (root)`, then **Save**.
 4. After a minute your site is live at `https://YOUR-USERNAME.github.io/nuqta/`.
 

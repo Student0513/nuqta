@@ -1,5 +1,9 @@
+/* Base reset (the page used to get these from its claude.ai host) */
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh}
+img{max-width:100%}
+
 /* Sign-in dialog, account menu and setup notice */
-body{min-height:100vh}
 .modal{position:fixed;inset:0;z-index:85;background:rgba(18,18,22,.55);display:grid;place-items:center;padding:16px;animation:rise .25s var(--ease)}
 .modal-card{position:relative;width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--card);border:2px solid var(--ink);box-shadow:8px 8px 0 var(--blue);padding:24px 22px 20px}
 .modal-card h2{font-family:var(--f-display);font-weight:400;font-size:34px;line-height:1;margin-bottom:6px}
