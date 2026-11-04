@@ -12,7 +12,8 @@ const ICON = {
   column:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16 24 6l18 10zM8 42h32M6 46h36"/><path d="M11 20v18M19 20v18M29 20v18M37 20v18M8 18h32"/></svg>',
   quill:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M40 6C26 8 16 18 12 34l-4 8"/><path d="M40 6c0 12-8 24-22 26M18 24l10 1M22 17l8 1"/></svg>',
   bubble:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10h36v22H22l-10 8v-8H6z"/><circle cx="16" cy="21" r="1.6" fill="currentColor"/><circle cx="24" cy="21" r="1.6" fill="currentColor"/><circle cx="32" cy="21" r="1.6" fill="currentColor"/></svg>',
-  cal:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="36" height="32"/><path d="M6 19h36M15 5v9M33 5v9"/><circle cx="24" cy="30" r="3" fill="currentColor"/></svg>'
+  cal:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="10" width="36" height="32"/><path d="M6 19h36M15 5v9M33 5v9"/><circle cx="24" cy="30" r="3" fill="currentColor"/></svg>',
+  user:'<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="16" r="8"/><path d="M8 42c2-9 8-13 16-13s14 4 16 13"/></svg>'
 };
 const sym = (k, cls='') => `<span class="sym ${cls}" aria-hidden="true">${ICON[k] || ICON.bulb}</span>`;
 const SECTIONS = ['Politics','Culture','Media & Narratives','Society','Economy','World'];
@@ -31,7 +32,8 @@ const S = {
   section:'All', author:'All',
   layer:'pieces', thread:null, floorTab:'prompt', promptId:null, sort:'top',
   replyTo:null, replyDraft:'', deskTab:'queue', editId:null, approving:null, armed:null, errs:{},
-  authMode:null, authMsg:null
+  authMode:null, authMsg:null,
+  profilesList:[], mention:null, dashTab:'activity', editDraft:null
 };
 const isEditor = () => S.me.role === 'editor' || S.me.role === 'owner';
 const isOwner = () => S.me.role === 'owner';
@@ -68,6 +70,8 @@ function richBody(txt){
     p = p.trim();
     if (p.startsWith('> ')) return `<blockquote>${esc(p.slice(2))}</blockquote>`;
     if (p.startsWith('## ')) return `<h2>${esc(p.slice(3))}</h2>`;
+    const lines = p.split('\n');
+    if (lines.every(l => l.trim().startsWith('- '))) return `<ul>${lines.map(l => `<li>${esc(l.trim().slice(2)).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}</li>`).join('')}</ul>`;
     return `<p>${esc(p).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>')}</p>`;
   }).join('');
 }
@@ -84,6 +88,7 @@ function friendly(err){
   if (m.includes('too_many_pending')) return 'You already have 5 articles in review. Wait for an editor first.';
   if (m.includes('only_owner')) return 'Only the site owner can change roles.';
   if (m.includes('row-level security') || m.includes('permission denied')) return 'Your account is not allowed to do that.';
+  if (m.includes('articles_status_check') || (m.includes('row-level security') && m.includes('articles') && S.savingDraft)) return 'Drafts need the latest database update. Run migration-002.sql in Supabase.';
   if (m.includes('Invalid login credentials')) return 'Email or password is wrong.';
   if (m.includes('Email not confirmed')) return 'Confirm your email first. Check your inbox for the link.';
   if (m.includes('Password should be')) return 'Password must be at least 6 characters.';
@@ -98,13 +103,15 @@ const sb = configured && window.supabase ? window.supabase.createClient(CFG.supa
 const ts = x => Date.parse(x);
 
 async function loadPublic(){
-  const [n, a, p, sc] = await Promise.all([
+  const [n, a, p, sc, pr] = await Promise.all([
     sb.from('news').select('*').order('created_at',{ascending:false}).limit(300),
     sb.from('articles').select('*').eq('status','published').order('published_at',{ascending:false}).limit(200),
     sb.from('prompts').select('*').order('week',{ascending:false}).limit(200),
-    sb.from('stance_counts').select('*')
+    sb.from('stance_counts').select('*'),
+    sb.from('profiles').select('id,display_name').eq('banned', false).limit(1000)
   ]);
   for (const r of [n,a,p,sc]) if (r.error) throw r.error;
+  S.profilesList = pr.data || [];
   S.news = n.data.map(x => ({...x, ts: ts(x.created_at)}));
   S.articles = a.data.map(x => ({...x, ts: ts(x.published_at || x.created_at)}));
   S.prompts = p.data;
@@ -114,7 +121,7 @@ async function loadPublic(){
 async function loadPosts(){
   const r = await sb.from('public_posts').select('*').order('created_at',{ascending:false}).limit(1000);
   if (r.error) throw r.error;
-  S.posts = r.data.map(p => ({id:p.id, key:p.id, uid:p.user_id, name:p.author_name, mine:p.mine, space:p.space, ref:p.ref||'', parent:p.parent_id, text:p.body, anon:p.anon, ts:ts(p.created_at), dots:p.dots}));
+  S.posts = r.data.map(p => ({id:p.id, key:p.id, uid:p.user_id, name:p.author_name, mine:p.mine, space:p.space, ref:p.ref||'', parent:p.parent_id, text:p.body, anon:p.anon, ts:ts(p.created_at), dots:p.dots, edited:!!p.edited_at}));
 }
 async function loadMe(){
   S.myDots = new Set(); S.myStances = {}; S.myReports = new Set(); S.mySubs = [];
@@ -138,9 +145,9 @@ async function loadMe(){
 async function loadDesk(){
   const [q, dec, rep, w, team] = await Promise.all([
     sb.from('articles').select('*').eq('status','pending').order('created_at',{ascending:true}),
-    sb.from('articles').select('id,title,author,status,decided_by').neq('status','pending').not('submitted_by','is',null).order('created_at',{ascending:false}).limit(10),
-    sb.from('reports').select('post_id, posts(id, body, anon, hidden, created_at, user_id, profiles(display_name))').eq('resolved', false),
-    sb.from('blocked_words').select('word').order('word'),
+    sb.from('articles').select('id,title,author,status,decided_by').in('status',['published','rejected']).not('submitted_by','is',null).order('created_at',{ascending:false}).limit(10),
+    isOwner() ? sb.from('reports').select('post_id, posts(id, body, anon, hidden, created_at, user_id, profiles!posts_user_id_fkey(display_name))').eq('resolved', false) : Promise.resolve({data:[]}),
+    isOwner() ? sb.from('blocked_words').select('word').order('word') : Promise.resolve({data:[]}),
     isOwner() ? sb.from('profiles').select('*').order('created_at',{ascending:false}).limit(500) : Promise.resolve({data:[]})
   ]);
   S.queue = (q.data||[]).map(x => ({...x, ts: ts(x.created_at)}));
@@ -158,24 +165,84 @@ async function act(fn, ok){
 }
 
 // ---------- derived ----------
-function activePrompt(){ const tk = todayKey(); return S.prompts.filter(p => p.week && p.week <= tk).sort((a,b)=> a.week < b.week ? 1 : -1)[0] || null; }
+function activePrompt(){
+  const tk = todayKey();
+  return S.prompts.filter(p => p.week && p.week <= tk)
+    .sort((a,b) => a.week !== b.week ? (a.week < b.week ? 1 : -1) : (String(a.created_at) < String(b.created_at) ? 1 : -1))[0] || null;
+}
 const postsFor = (space, ref) => S.posts.filter(p => p.space === space && (p.ref||'') === (ref||''));
+// The home page's "Latest Nuqta": the article editors pin (featured), otherwise the newest.
+const latestNuqta = () => S.articles.find(a => a.featured) || S.articles[0] || null;
+// @-tags use the display name with spaces as underscores, e.g. @Rayyan_Awais
+const tagOf = name => String(name || '').trim().replace(/\s+/g, '_');
+const myTag = () => S.me.name ? tagOf(S.me.name).toLowerCase() : null;
+const TAG_RE = /(^|\s)@([\w؀-ۿ]{2,40})/g;
+function fmtPost(t){
+  return esc(t).replace(TAG_RE, (m, sp, n) => `${sp}<span class="mention${n.toLowerCase() === myTag() ? ' me' : ''}">@${n.replace(/_/g, ' ')}</span>`);
+}
+const mentionsMe = p => { const me = myTag(); if (!me) return false; for (const m of p.text.matchAll(TAG_RE)) if (m[2].toLowerCase() === me) return true; return false; };
 const stanceTally = aid => { const r = S.stanceCounts[aid] || {}; return {agree:r.agree||0, complicated:r.complicated||0, disagree:r.disagree||0}; };
 
 // ---------- shell ----------
+// Ticker: scrolls on its own, stops while hovered, speeds up for as long as it is
+// held down (mouse or finger), and a quick click on a headline opens that story.
+const T = {x:0, hover:false, held:false, last:0, key:'', downAt:0, downId:null, holdTimer:0};
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function renderTicker(){
   const items = S.news.slice(0,10); const el = $('#ticker');
-  if (!items.length) { el.innerHTML = `<span>${S.loaded ? 'The desk is quiet. First headlines land here.' : 'Loading the latest from the desk'}</span>`; return; }
-  const row = items.map(n => `<span><button data-act="open-news" data-id="${esc(n.id)}">${esc(n.title)}</button></span>`).join('');
-  el.innerHTML = row + row;
+  const html = items.length
+    ? (r => r + r)(items.map(n => `<span data-id="${esc(n.id)}">${esc(n.title)}</span>`).join(''))
+    : `<span>${S.loaded ? 'The desk is quiet. First headlines land here.' : 'Loading the latest from the desk'}</span>`;
+  if (html === T.key) return;
+  T.key = html; el.innerHTML = html; T.x = 0;
+}
+function tickerLoop(ts){
+  const el = $('#ticker'); const dt = T.last ? Math.min(64, ts - T.last) : 0; T.last = ts;
+  const boosting = T.held;
+  const speed = boosting ? 520 : (T.hover || reduceMotion) ? 0 : 42; // pixels per second
+  const half = el.scrollWidth / 2;
+  if (half > el.parentElement.clientWidth / 2) { T.x = (T.x + speed * dt / 1000) % half; el.style.transform = `translateX(${-T.x}px)`; }
+  $('#ticker-wrap').classList.toggle('boost', boosting);
+  requestAnimationFrame(tickerLoop);
+}
+function initTicker(){
+  const w = $('#ticker-wrap');
+  w.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') T.hover = true; });
+  w.addEventListener('pointerleave', () => { T.hover = false; T.held = false; });
+  w.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    e.preventDefault();
+    T.downAt = performance.now(); T.downId = e.target.closest('[data-id]')?.dataset.id || null;
+    clearTimeout(T.holdTimer);
+    // only a press held longer than a quick click starts the fast-forward
+    if (!reduceMotion) T.holdTimer = setTimeout(() => { T.held = true; }, 180);
+    try { w.setPointerCapture(e.pointerId); } catch {}
+  });
+  const release = () => { clearTimeout(T.holdTimer); T.held = false; T.downId = null; };
+  w.addEventListener('pointerup', () => {
+    const quick = !T.held && performance.now() - T.downAt < 300, id = T.downId;
+    release();
+    if (quick && id) openNews(id);
+  });
+  w.addEventListener('pointercancel', release);
+  w.addEventListener('lostpointercapture', () => { clearTimeout(T.holdTimer); T.held = false; });
+  w.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('blur', release);
+  requestAnimationFrame(tickerLoop);
 }
 function renderChrome(){
   const nav = $('#nav'); let ed = nav.querySelector('.ed');
-  const q = S.queue.length + S.reports.length;
+  const q = S.queue.length + (isOwner() ? S.reports.length : 0);
   if (isEditor() && !ed) { nav.insertAdjacentHTML('beforeend', `<button class="ed" data-act="nav" data-view="newsroom"></button>`); ed = nav.querySelector('.ed'); }
   if (!isEditor() && ed) { ed.remove(); ed = null; }
   if (ed) ed.textContent = 'Newsroom' + (q ? ` (${q})` : '');
   nav.querySelectorAll('button').forEach(b => b.setAttribute('aria-current', b.dataset.view === S.view ? 'page' : 'false'));
+  $('#tabbar').querySelectorAll('button').forEach(b => b.setAttribute('aria-current', b.dataset.view === S.view ? 'page' : 'false'));
+  $('#tab-me').textContent = S.me.id ? 'You' : 'Sign in';
+  const signed = !!S.me.id;
+  $('#foot-new').hidden = signed; $('#foot-join').hidden = signed; $('#foot-me').hidden = !signed;
+  $('#dashbtn').hidden = !signed;
+  if (signed) $('#guide-pop').hidden = true; $('#dashbtn').setAttribute('aria-current', S.view === 'me' ? 'page' : 'false');
   $('#foot-ed').hidden = !isEditor();
   const roleLabel = {owner:'Owner', editor:'Editor', member:'Member', banned:'Suspended'}[S.me.role] || '';
   $('#acct').innerHTML = S.me.id
@@ -187,7 +254,7 @@ function render(){
   renderChrome(); renderTicker();
   const v = $('#view');
   const fresh = lastView !== S.view; lastView = S.view;
-  v.innerHTML = S.view === 'articles' ? viewArticles() : S.view === 'forum' ? viewForum() : S.view === 'write' ? viewWrite() : S.view === 'newsroom' ? viewNewsroom() : viewNews();
+  v.innerHTML = S.view === 'articles' ? viewArticles() : S.view === 'forum' ? viewForum() : S.view === 'write' ? viewWrite() : S.view === 'newsroom' ? viewNewsroom() : S.view === 'me' ? viewMe() : S.view === 'about' ? viewAbout() : viewNews();
   if (fresh) { v.classList.add('anim'); clearTimeout(render.t); render.t = setTimeout(()=>v.classList.remove('anim'), 1600); }
   if (S.replyTo) { const ta = $('#reply-ta'); if (ta) ta.value = S.replyDraft; }
 }
@@ -196,7 +263,7 @@ function render(){
 function viewNews(){
   const lead = S.news[0];
   const brief = S.news.filter(n => dayKey(n.ts) === (lead ? dayKey(lead.ts) : todayKey())).slice(0,5);
-  const latestArt = S.articles[0];
+  const latestArt = latestNuqta();
   const now = new Date();
   const items = S.news.filter(n => (!S.day || dayKey(n.ts) === S.day) && (S.region === 'All' || n.region === S.region));
   const groups = []; items.forEach(n => { const k = dayKey(n.ts); let g = groups[groups.length-1]; if (!g || g.k !== k) groups.push(g = {k, items:[]}); g.items.push(n); });
@@ -224,7 +291,7 @@ function viewNews(){
           ${brief.length ? `<ol>${brief.map(n=>`<li><button data-act="open-news" data-id="${esc(n.id)}">${esc(n.title)}<span class="when">${esc(n.region)} · ${fmtTime(n.ts)}</span></button></li>`).join('')}</ol>`
             : `<p style="padding:6px 0 10px 28px;color:var(--muted);font-style:italic">Five things to know before chai, once the day's stories are in.</p>`}
         </div>
-        ${latestArt ? `<button class="nuqta-sticker slap" style="--i:7" data-act="open-article" data-id="${esc(latestArt.id)}"><span class="ring"><span class="dot live"></span></span><span><span class="big">TODAY'S NUQTA</span><q>${esc(latestArt.nuqta)}</q></span></button>` : ''}
+        ${latestArt ? `<button class="nuqta-sticker slap" style="--i:7" data-act="open-article" data-id="${esc(latestArt.id)}"><span class="ring"><span class="dot live"></span></span><span><span class="big">LATEST NUQTA</span><q>${esc(latestArt.nuqta)}</q></span></button>` : ''}
       </div>
     </div>
   </section>
@@ -393,9 +460,9 @@ function composer(space, ref, ph){
   if (!canPost()) return `<div class="composer"><span class="hint">Your account is suspended from posting.</span></div>`;
   return `<div class="composer">
     <label class="sr" for="${id}">Your post</label>
-    <textarea id="${id}" maxlength="2000" placeholder="${esc(ph)}"></textarea>
+    <div class="ta-wrap"><textarea id="${id}" maxlength="2000" placeholder="${esc(ph)}" data-mention="1"></textarea></div>
     ${S.errs[id] ? `<span class="err">${esc(S.errs[id])}</span>` : ''}
-    <div class="row"><label><input type="checkbox" id="${id}-anon"> Post anonymously</label>
+    <div class="row"><label><input type="checkbox" id="${id}-anon"> Post anonymously</label><span class="hint">Type @ to tag someone</span>
     <button class="btn blue" data-act="post" data-space="${space}" data-ref="${esc(ref)}" data-for="${id}">Post</button></div>
   </div>`;
 }
@@ -412,20 +479,25 @@ function postHtml(p, isReply){
   const can = canPost(), dotted = S.myDots.has(p.id), reported = S.myReports.has(p.id);
   const armed = S.armed === 'post:'+p.key;
   return `<article class="post ${isReply?'reply':''}">
-    <div class="who"><span class="av" style="background:${p.anon?'var(--ink)':`hsl(${Math.abs(rot(p.uid||p.id,180))|0} 55% 55%)`}"></span><b>${esc(p.name || 'Reader')}</b>${p.mine?'<span class="sticker blue" style="padding:1px 6px">you</span>':''}<time>${ago(p.ts)}</time></div>
-    <div class="body">${esc(p.text)}</div>
+    <div class="who"><span class="av" style="background:${p.anon?'var(--ink)':`hsl(${Math.abs(rot(p.uid||p.id,180))|0} 55% 55%)`}"></span><b>${esc(p.name || 'Reader')}</b>${p.mine?'<span class="sticker blue" style="padding:1px 6px">you</span>':''}<time>${ago(p.ts)}</time>${p.edited ? '<span class="edited">edited</span>' : ''}</div>
+    ${S.editPost === p.key ? `<div class="edit-box"><div class="ta-wrap"><label class="sr" for="edit-ta">Edit your post</label><textarea id="edit-ta" maxlength="2000" data-mention="1">${esc(p.text)}</textarea></div>
+      ${S.errs.edit ? `<span class="err" style="font-family:var(--f-mono);font-size:12px;color:var(--red);font-weight:600">${esc(S.errs.edit)}</span>` : ''}
+      <div class="acts"><button class="btn blue" data-act="edit-save" data-key="${esc(p.key)}">Save</button><button class="link" data-act="edit-cancel">Cancel</button></div></div>`
+    : `<div class="body">${fmtPost(p.text)}</div>`}
     <div class="acts">
       <button class="dotit" data-act="dot" data-key="${esc(p.key)}" aria-pressed="${dotted}" ${can?'':'disabled'} title="Dot it: this made me think"><span class="dot"></span>${p.dots}</button>
       ${!isReply && can ? `<button class="link" data-act="reply" data-key="${esc(p.key)}">Reply</button>` : ''}
+      ${isReply && can && !p.anon && !p.mine ? `<button class="link" data-act="reply" data-key="${esc(p.parent)}" data-tag="${esc(tagOf(p.name))}">Reply</button>` : ''}
       ${can && !p.mine ? `<button class="link" data-act="report" data-key="${esc(p.key)}">${reported?'Reported':'Report'}</button>` : ''}
-      ${p.mine || isEditor() ? `<button class="link danger" data-act="del-post" data-key="${esc(p.key)}">${armed?'Tap again to delete':'Delete'}</button>` : ''}
+      ${p.mine && S.editPost !== p.key ? `<button class="link" data-act="edit-post" data-key="${esc(p.key)}">Edit</button>` : ''}
+      ${p.mine || isOwner() ? `<button class="link danger" data-act="del-post" data-key="${esc(p.key)}">${armed?'Tap again to delete':'Delete'}</button>` : ''}
     </div>
   </article>`;
 }
 function replyBox(p){
   return `<div class="composer post reply" style="padding:12px">
     <label class="sr" for="reply-ta">Your reply</label>
-    <textarea id="reply-ta" maxlength="1200" placeholder="Reply to this…"></textarea>
+    <div class="ta-wrap"><textarea id="reply-ta" maxlength="1200" placeholder="Reply to this… type @ to tag someone" data-mention="1"></textarea></div>
     ${S.errs.reply ? `<span class="err">${esc(S.errs.reply)}</span>` : ''}
     <div class="row"><label><input type="checkbox" id="reply-anon"> Anonymous</label>
     <span style="display:flex;gap:10px"><button class="link" data-act="reply-cancel">Cancel</button><button class="btn blue" data-act="post-reply" data-key="${esc(p.key)}" data-space="${esc(p.space)}" data-ref="${esc(p.ref||'')}">Reply</button></span></div>
@@ -441,20 +513,176 @@ function articleFields(a, prefix){
     <label>Byline<input id="${prefix}-author" required maxlength="80" value="${esc(a?.author || (prefix==='s' ? S.me.name : ''))}" placeholder="Name as it should appear"></label></div>
     <label>Article<span class="help">Leave a blank line between paragraphs. Start a line with "> " for a pull quote or "## " for a subheading. **Bold** for emphasis.</span><textarea id="${prefix}-body" class="long" required>${esc(a?.body)}</textarea></label>`;
 }
+function subRow(s, L){
+  const pill = `<span class="pill ${s.status==='published'?'approved':s.status}">${L[s.status]}</span>`;
+  if (s.status === 'published') return pill + `<button class="link" data-act="open-article" data-id="${esc(s.id)}">Read</button>`;
+  const edit = (s.status === 'draft' || s.status === 'rejected') ? `<button class="link" data-act="edit-draft" data-id="${esc(s.id)}">${s.status === 'draft' ? 'Edit' : 'Revise'}</button>` : '';
+  return pill + edit + `<button class="link danger" data-act="withdraw" data-id="${esc(s.id)}">${S.armed === 'wd:'+s.id ? 'Confirm' : (s.status === 'draft' ? 'Delete' : 'Withdraw')}</button>`;
+}
 function viewWrite(){
   let form;
   if (!sb) form = `<div class="empty"><b>Not connected</b>Submissions open once the database is connected.</div>`;
   else if (!S.me.id) form = `<div class="empty"><b>Sign in to submit</b>You need a free account to send in an article.<div style="margin-top:12px;display:flex;gap:10px;justify-content:center"><button class="btn blue" data-act="auth" data-mode="signup">Create account</button><button class="btn ghost" data-act="auth" data-mode="signin">Sign in</button></div></div>`;
   else if (!canPost()) form = `<div class="empty"><b>Account suspended</b>Contact a Nuqta editor.</div>`;
-  else form = `<form class="formcard" id="f-submit"><h3>Your article</h3>${articleFields(null,'s')}
+  else {
+    const d = S.editDraft ? S.mySubs.find(x => x.id === S.editDraft) : null;
+    form = `<form class="formcard" id="f-submit"><h3>${d ? (d.status === 'rejected' ? 'Revise your article' : 'Edit draft') : 'Your article'}</h3>
+    ${d?.editor_note ? `<p class="help" style="color:var(--red)">Editor's note: ${esc(d.editor_note)}</p>` : ''}
+    ${articleFields(d,'s')}
     ${S.errs.submit ? `<span class="help" style="color:var(--red);font-weight:600">${esc(S.errs.submit)}</span>` : ''}
-    <div class="row"><button class="btn blue" type="submit">Send for review</button><span class="help">Editors usually reply within a few days.</span></div></form>`;
-  const statusLabel = {pending:'In review', published:'Published', rejected:'Sent back'};
+    <div class="row"><button class="btn blue" type="submit">Send for review</button><button class="btn ghost" type="button" data-act="save-draft">Save draft</button>${d ? '<button class="link" type="button" data-act="new-draft">Start a new one</button>' : ''}<span class="help">Drafts are only visible to you.</span></div></form>`;
+  }
+  const statusLabel = {draft:'Draft', pending:'In review', published:'Published', rejected:'Sent back'};
   return `<section class="wrap">
     <div class="page-h rise">${sym('quill')}<h1>WRITE FOR US</h1><p class="tagline">Send in an opinion piece. A Nuqta editor reads every submission and publishes it on <strong>Articles</strong> once approved.</p></div>
     ${guide('1. Write your piece below. 2. An editor reviews it, and may send it back with notes. 3. Once approved it goes live on Articles with your byline.')}
     <div class="cols"><div style="min-width:0">${form}</div>
-      <div class="mlist"><h4>My submissions</h4>${S.mySubs.length ? S.mySubs.map(s=>`<div class="mrow"><span class="t">${esc(s.title)}<small>${fmtDate(s.ts)}</small>${s.editor_note?`<span class="quote">Editor's note: ${esc(s.editor_note)}</span>`:''}</span><span class="pill ${s.status==='published'?'approved':s.status}">${statusLabel[s.status]}</span>${s.status==='published'?`<button class="link" data-act="open-article" data-id="${esc(s.id)}">Read</button>`:`<button class="link danger" data-act="withdraw" data-id="${esc(s.id)}">${S.armed==='wd:'+s.id?'Confirm':'Withdraw'}</button>`}</div>`).join('') : '<p class="help">Nothing sent yet.</p>'}</div>
+      <div class="mlist"><h4>My submissions</h4>${S.mySubs.length ? S.mySubs.map(s=>`<div class="mrow"><span class="t">${esc(s.title)}<small>${fmtDate(s.ts)}</small>${s.editor_note?`<span class="quote">Editor's note: ${esc(s.editor_note)}</span>`:''}</span>${subRow(s, statusLabel)}</div>`).join('') : '<p class="help">Nothing written yet.</p>'}</div>
+    </div>
+  </section>`;
+}
+
+// ---------- YOUR SPACE (personal dashboard) ----------
+function postRef(p){
+  if (p.space === 'article') { const a = S.articles.find(x => x.id === p.ref); return a ? 'On “' + a.title + '”' : 'On an article'; }
+  if (p.space === 'prompt') { const q = S.prompts.find(x => x.id === p.ref); return q ? 'Answer to “' + q.question + '”' : 'Weekly question'; }
+  return 'Open wall';
+}
+function dashPost(p){
+  return `<button class="dash-item" data-act="goto-post" data-space="${esc(p.space)}" data-ref="${esc(p.ref)}">
+    <span class="dash-where">${esc(postRef(p))}${p.parent ? ' · reply' : ''}${p.anon ? ' · anonymous' : ''}</span>
+    <span class="dash-text">${fmtPost(p.text.length > 220 ? p.text.slice(0,220) + '…' : p.text)}</span>
+    <span class="dash-meta">${p.mine ? '' : esc(p.name || 'Reader') + ' · '}${ago(p.ts)} · ${p.dots} ${p.dots === 1 ? 'dot' : 'dots'}</span></button>`;
+}
+function viewMe(){
+  if (!S.me.id) return `<section class="wrap"><div class="page-h rise"><h1>YOUR SPACE</h1><p class="tagline">Your posts, likes, tags and drafts in one place.</p></div>
+    <div class="empty"><b>Sign in to see your dashboard</b>It's free and takes a minute.<div style="margin-top:12px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn blue" data-act="auth" data-mode="signup">Create account</button><button class="btn ghost" data-act="auth" data-mode="signin">Sign in</button></div></div></section>`;
+  const mine = S.posts.filter(p => p.mine).sort((a,b) => b.ts - a.ts);
+  const dotted = S.posts.filter(p => S.myDots.has(p.id)).sort((a,b) => b.ts - a.ts);
+  const tagged = S.posts.filter(p => !p.mine && mentionsMe(p)).sort((a,b) => b.ts - a.ts);
+  const stances = Object.entries(S.myStances).map(([id, v]) => ({a: S.articles.find(x => x.id === id), v})).filter(x => x.a);
+  const drafts = S.mySubs.filter(s => s.status === 'draft');
+  const published = S.mySubs.filter(s => s.status === 'published');
+  const received = mine.reduce((n, p) => n + p.dots, 0);
+  const L = {draft:'Draft', pending:'In review', published:'Published', rejected:'Sent back'};
+  const stanceWord = {agree:'Agreed', complicated:"It's complicated", disagree:'Disagreed'};
+  const tabs = [['activity','Activity',mine.length],['liked','Liked',dotted.length + stances.length],['tagged','Tagged',tagged.length],['writing','Writing',S.mySubs.length],['account','Account']];
+  const t = S.dashTab; let body = '';
+  if (t === 'activity') body = mine.length ? `<div class="dash-list">${mine.map(dashPost).join('')}</div>` : `<div class="empty"><b>No posts yet</b>Join a discussion on The Floor and it shows up here.<div style="margin-top:12px"><button class="btn blue" data-act="nav" data-view="forum">Go to The Floor</button></div></div>`;
+  else if (t === 'liked') body = (dotted.length || stances.length)
+    ? `${stances.length ? `<h4 class="dash-h">Your stances</h4><div class="dash-list">${stances.map(({a, v}) => `<button class="dash-item" data-act="open-article" data-id="${esc(a.id)}"><span class="dash-where"><span class="pill ${v === 'agree' ? 'approved' : v === 'disagree' ? 'rejected' : 'pending'}">${stanceWord[v]}</span></span><span class="dash-text"><strong>${esc(a.title)}</strong></span><span class="dash-meta">${esc(a.author)}</span></button>`).join('')}</div>` : ''}
+       ${dotted.length ? `<h4 class="dash-h">Posts you dotted</h4><div class="dash-list">${dotted.map(dashPost).join('')}</div>` : ''}`
+    : `<div class="empty"><b>Nothing liked yet</b>Dot a post on The Floor, or say where you stand on an article.</div>`;
+  else if (t === 'tagged') body = tagged.length ? `<div class="dash-list">${tagged.map(dashPost).join('')}</div>` : `<div class="empty"><b>No tags yet</b>When someone writes @${esc(tagOf(S.me.name))} in a post, it appears here.</div>`;
+  else if (t === 'writing') body = `<div class="row" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap"><button class="btn blue" data-act="new-draft">Write a new article</button></div>
+    <div class="mlist">${S.mySubs.length ? S.mySubs.map(s => `<div class="mrow"><span class="t">${esc(s.title)}<small>${s.status === 'draft' ? 'Last saved ' : ''}${fmtDate(s.ts)}</small>${s.editor_note ? `<span class="quote">Editor's note: ${esc(s.editor_note)}</span>` : ''}</span>${subRow(s, L)}</div>`).join('') : '<p class="help">No drafts or submissions yet.</p>'}</div>`;
+  else body = `<div class="cols"><form class="formcard" id="f-name2"><h3>Your name</h3><p class="help">Shown on your posts. Others tag you as @${esc(tagOf(S.me.name))}.</p>
+      <label>Display name<input id="au-name2" required minlength="2" maxlength="40" value="${esc(S.me.name)}"></label>
+      <div class="row"><button class="btn blue" type="submit">Save name</button></div></form>
+      <div class="formcard"><h3>Account</h3><p class="help">${esc(S.me.email || '')}</p><p class="help">Role: ${esc({owner:'Owner',editor:'Editor',member:'Member',banned:'Suspended'}[S.me.role] || '')}</p>
+      <div class="row"><button class="btn ghost" data-act="auth" data-mode="forgot">Change password</button><button class="btn" data-act="signout">Sign out</button></div></div></div>`;
+  return `<section class="wrap">
+    <div class="page-h rise">${sym('user')}<h1>YOUR SPACE</h1><p class="tagline">Hi ${esc(S.me.name)}. Everything you've done on Nuqta, in one place.</p></div>
+    ${isEditor() ? `<div class="guide"><span class="gl">${sym('quill')} ${isOwner() ? 'Owner' : 'Editor'}</span><span class="gt">${S.queue.length ? `<b>${S.queue.length}</b> article${S.queue.length === 1 ? '' : 's'} waiting for review.` : 'Nothing waiting for review.'}</span><button class="gx" data-act="nav" data-view="newsroom">Open the Newsroom →</button></div>` : ''}
+    <div class="stats">
+      <div class="stat"><b>${mine.filter(p => !p.parent).length}</b><span>Posts</span></div>
+      <div class="stat"><b>${mine.filter(p => p.parent).length}</b><span>Replies</span></div>
+      <div class="stat"><b>${received}</b><span>Dots received</span></div>
+      <div class="stat"><b>${tagged.length}</b><span>Times tagged</span></div>
+      <div class="stat"><b>${published.length}</b><span>Articles published</span></div>
+      <div class="stat"><b>${drafts.length}</b><span>Drafts</span></div>
+    </div>
+    <div class="subtabs" role="group" aria-label="Dashboard">${tabs.map(([k,l,n]) => `<button data-act="dash-tab" data-t="${k}" aria-pressed="${t===k}">${l}${n ? ` <span class="n" style="background:var(--ink)">${n}</span>` : ''}</button>`).join('')}</div>
+    ${body}
+  </section>`;
+}
+
+// ---------- ABOUT + USER GUIDE ----------
+const SUPPORT_EMAIL = 'mahadnadeem08@gmail.com';
+function viewAbout(){
+  const yes = '<span class="yes" aria-label="Yes">●</span>', no = '<span class="no" aria-label="No">–</span>';
+  const roles = [
+    ['Read news, articles and The Floor', 1,1,1,1],
+    ['Post, reply, dot, report and tag people', 0,1,1,1],
+    ['Say where you stand on an article', 0,1,1,1],
+    ['Edit or delete your own posts', 0,1,1,1],
+    ['Write drafts and submit articles for review', 0,1,1,1],
+    ['Your personal dashboard', 0,1,1,1],
+    ['Approve or send back submitted articles', 0,0,1,1],
+    ['Post news, publish articles, set weekly questions', 0,0,1,1],
+    ['Choose the Latest Nuqta', 0,0,1,1],
+    ['Moderation: reports, blocked words, removing posts', 0,0,0,1],
+    ['Edit or delete existing content, remove samples', 0,0,0,1],
+    ['Make people editors, suspend accounts', 0,0,0,1]
+  ];
+  const step = (title, body, open) => `<details class="g-step"${open ? ' open' : ''}><summary>${title}</summary><div class="g-body">${body}</div></details>`;
+  return `<section class="wrap about">
+    <div class="page-h rise"><h1><span class="blk">ABOUT</span> NUQTA</h1><p class="tagline"><strong>Nuqta (<span lang="ur" class="ur-inline">نقطہ</span>) means "the point".</strong> We're a student-led publication on politics, culture, media and the world around us. Every piece we publish starts with its point.</p></div>
+
+    <div class="about-grid">
+      <div class="about-card">${sym('globe')}<h3>Current Affairs</h3><p>The day's news in short, clear stories, each with a note on why it matters. Filter by date or region.</p><button class="link" data-act="nav" data-view="news">Read the news</button></div>
+      <div class="about-card">${sym('quill')}<h3>Articles</h3><p>Opinion pieces by Nuqta writers. Each one opens with its nuqta, the single point it argues.</p><button class="link" data-act="nav" data-view="articles">Browse articles</button></div>
+      <div class="about-card">${sym('bubble')}<h3>The Floor</h3><p>Our forum. Discuss our articles, answer the question of the week, or start your own thread.</p><button class="link" data-act="nav" data-view="forum">Join the discussion</button></div>
+    </div>
+
+    <h2 class="about-h" id="guide">User guide</h2>
+    <div class="g-list">
+      ${step('Getting started: create an account', `<ol>
+        <li>Click <strong>Sign in</strong> (top right, or <strong>Sign in</strong> in the bottom bar on a phone), then <strong>Create an account</strong>.</li>
+        <li>Choose a display name. Others see it on your posts and can tag you with it.</li>
+        <li>Open the confirmation email we send and click the link. Check spam if it doesn't arrive in a few minutes.</li>
+        <li>Sign in. A <strong>My dashboard</strong> button appears next to the Nuqta logo.</li></ol>
+        <p>Forgot your password? Use <strong>Forgot password?</strong> on the sign-in window and we'll email you a reset link.</p>`, true)}
+      ${step('Reading the news', `<ul>
+        <li><strong>The Brief</strong> lists the day's top stories. <strong>Why it matters</strong> on any card opens a short explanation.</li>
+        <li>Use <strong>All dates</strong> to open the calendar. Days with stories have a red dot. Pick one to see just that day. Use <strong>All regions</strong> to filter by place.</li>
+        <li><strong>Clear filters</strong> brings every story back.</li>
+        <li>The headline bar at the top scrolls on its own. Hover over it to pause, hold it down to speed it up, and click a headline to read that story.</li></ul>`)}
+      ${step('Reading articles', `<ul>
+        <li>Every article starts with its <strong>nuqta</strong>: the writer's main point in one sentence. The home page shows the <strong>Latest Nuqta</strong>, chosen by the editors.</li>
+        <li>Filter by section or by writer. Open any article to read it in full.</li>
+        <li>At the end, say whether you <strong>agree</strong>, think <strong>it's complicated</strong>, or <strong>disagree</strong>, and see how other readers stand. Change your mind any time.</li>
+        <li><strong>Discuss on The Floor</strong> takes you straight to that article's thread.</li></ul>`)}
+      ${step('Taking part on The Floor', `<ul>
+        <li><strong>Article discussions</strong>: one thread per published article.</li>
+        <li><strong>Open floor</strong>: the <strong>question of the week</strong> (a new one every Monday), an <strong>open wall</strong> for any topic, and <strong>past questions</strong> with their answers.</li>
+        <li><strong>Dot</strong> a post when it makes you think. The best posts rise to the top under <em>Top</em>.</li>
+        <li>Type <strong>@</strong> to tag someone. They'll see it under <em>Tagged</em> in their dashboard.</li>
+        <li>Tick <strong>Post anonymously</strong> to hide your name from readers. The site owner can still see who posted, to keep things safe.</li>
+        <li>Made a mistake? <strong>Edit</strong> or <strong>Delete</strong> your own posts at any time. Edited posts show an "edited" tag.</li>
+        <li>See something that breaks the rules? Click <strong>Report</strong>. A post reported by three people is hidden until it's reviewed.</li></ul>`)}
+      ${step('Writing for Nuqta', `<ol>
+        <li>Go to <strong>Submit an article</strong> (in the footer, on the Articles page, or <em>Writing</em> in your dashboard).</li>
+        <li>Fill in the title, your nuqta, a short standfirst, the section, your byline and the article. A blank line starts a new paragraph. Start a line with <code>&gt; </code> for a pull quote or <code>## </code> for a subheading.</li>
+        <li><strong>Save draft</strong> as often as you like. Drafts are private to you.</li>
+        <li><strong>Send for review</strong> when it's ready. An editor either publishes it or sends it back with a note, and you can revise and resend it.</li></ol>`)}
+      ${step('Your dashboard', `<ul>
+        <li><strong>Activity</strong>: everything you've posted. Click a post to jump to its discussion.</li>
+        <li><strong>Liked</strong>: posts you dotted and the stances you took on articles.</li>
+        <li><strong>Tagged</strong>: posts where someone tagged you.</li>
+        <li><strong>Writing</strong>: your drafts and the status of every article you've submitted.</li>
+        <li><strong>Account</strong>: change your display name or password, or sign out.</li></ul>`)}
+    </div>
+
+    <h2 class="about-h">Who can do what</h2>
+    <div class="roles-wrap"><table class="roles">
+      <thead><tr><th scope="col">What you can do</th><th scope="col">Visitor</th><th scope="col">Member</th><th scope="col">Editor</th><th scope="col">Owner</th></tr></thead>
+      <tbody>${roles.map(([l, ...c]) => `<tr><th scope="row">${l}</th>${c.map(v => `<td>${v ? yes : no}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table></div>
+    <p class="help" style="margin-top:8px">Visitor: anyone browsing without an account. Member: anyone who signs up. Editors are chosen by the owner.</p>
+
+    <h2 class="about-h">House rules</h2>
+    <ul class="rules-list">
+      <li>Argue with the idea, not the person.</li>
+      <li>Bring a reason or a source.</li>
+      <li>No hate, harassment, or sharing people's private information.</li>
+      <li>Abusive language is blocked automatically, in English and Roman Urdu. Accounts that keep breaking the rules can be suspended.</li>
+    </ul>
+
+    <div class="contact">
+      <div><h2 class="about-h" style="margin:0 0 6px">Contact support</h2>
+      <p>Trouble signing in, a problem with a post, a correction to an article, or want to join the team? Email the Nuqta support team:</p></div>
+      <div class="contact-row"><a class="contact-mail" href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a><button class="btn ghost" data-act="copy-email">Copy email</button></div>
     </div>
   </section>`;
 }
@@ -462,8 +690,10 @@ function viewWrite(){
 // ---------- NEWSROOM ----------
 function viewNewsroom(){
   if (!isEditor()) return `<section class="wrap"><div class="page-h"><h1>NEWSROOM</h1></div><div class="empty"><b>Editors only</b>This page is for Nuqta's editors.</div></section>`;
-  const tabs = [['queue','Review queue',S.queue.length],['news','Post a story'],['article','Publish an article'],['prompt','Weekly questions'],['mod','Moderation',S.reports.length],['manage','Manage']];
-  if (isOwner()) tabs.push(['team','Team']);
+  const tabs = [['queue','Review queue',S.queue.length],['nuqta','Latest Nuqta'],['news','Post a story'],['article','Publish an article'],['prompt','Weekly questions']];
+  // Moderation, managing existing content and the team are for the owner only
+  if (isOwner()) tabs.push(['mod','Moderation',S.reports.length],['manage','Manage'],['team','Team']);
+  if (!tabs.some(([k]) => k === S.deskTab)) S.deskTab = 'queue';
   const t = S.deskTab; let body = '';
   if (t === 'queue') {
     body = S.queue.length ? `<div class="mlist">${S.queue.map(s=>`<div class="mrow"><span class="t"><strong>${esc(s.title)}</strong><small>${esc(s.section)} · by ${esc(s.author)} · sent ${ago(s.ts)} · ${readMins(s.body)} min read</small><span class="quote">“${esc(s.nuqta)}”</span></span>
@@ -471,6 +701,15 @@ function viewNewsroom(){
         <div class="inline-note"><input id="note-${esc(s.id)}" placeholder="Reason for sending back (shown to the writer)" maxlength="300"><button class="link danger" data-act="reject" data-id="${esc(s.id)}">Send back</button></div></div>`).join('')}</div>`
       : `<div class="empty"><b>Queue is clear</b>New submissions from writers show up here for an editor to approve.</div>`;
     if (S.decided.length) body += `<div class="mlist" style="margin-top:20px"><h4>Recently decided</h4>${S.decided.map(s=>`<div class="mrow"><span class="t">${esc(s.title)}<small>by ${esc(s.author)}</small></span><span class="pill ${s.status==='published'?'approved':s.status}">${s.status==='published'?'Published':'Sent back'}</span></div>`).join('')}</div>`;
+  } else if (t === 'nuqta') {
+    const cur = latestNuqta();
+    body = S.articles.length ? `<div class="cols"><form class="formcard" id="f-nuqta"><h3>Latest Nuqta</h3>
+      <p class="help">The blue "Latest Nuqta" box on the home page shows one article's nuqta line. Pick the article and edit the line here. The chosen article is also featured at the top of Articles.</p>
+      <label>Article<select id="ln-article">${S.articles.map(a => `<option value="${esc(a.id)}" ${cur && cur.id === a.id ? 'selected' : ''}>${esc(a.title)}</option>`).join('')}</select></label>
+      <label>The nuqta line<textarea id="ln-text" required maxlength="240">${esc(cur?.nuqta)}</textarea><span class="help">One sentence. It also updates the line at the top of the article.</span></label>
+      <div class="row"><button class="btn blue" type="submit">Save Latest Nuqta</button></div></form>
+      <div><h4 class="dash-h">Preview</h4><div class="nuqta-sticker" style="cursor:default"><span class="ring"><span class="dot live"></span></span><span><span class="big">LATEST NUQTA</span><q id="ln-preview">${esc(cur?.nuqta)}</q></span></div></div></div>`
+      : `<div class="empty"><b>No articles yet</b>Publish an article first. Its nuqta line becomes the Latest Nuqta.</div>`;
   } else if (t === 'news') {
     const n = S.editId ? S.news.find(x=>x.id===S.editId) : null;
     body = `<form class="formcard" id="f-news"><h3>${n?'Edit story':'New story'}</h3>
@@ -531,8 +770,8 @@ function viewNewsroom(){
 function mrow(kind, x, title, sub){
   const armed = S.armed === kind+':'+x.id;
   return `<div class="mrow"><span class="t">${esc(title)}<small>${esc(sub)}${x.sample?' · sample':''}${x.featured?' · featured':''}</small></span>
-    <button class="link" data-act="desk-edit" data-kind="${kind}" data-id="${esc(x.id)}">Edit</button>
-    <button class="link danger" data-act="desk-del" data-kind="${kind}" data-id="${esc(x.id)}">${armed?'Confirm':'Delete'}</button></div>`;
+    ${isOwner() ? `<button class="link" data-act="desk-edit" data-kind="${kind}" data-id="${esc(x.id)}">Edit</button>
+    <button class="link danger" data-act="desk-del" data-kind="${kind}" data-id="${esc(x.id)}">${armed?'Confirm':'Delete'}</button>` : ''}</div>`;
 }
 
 // ---------- reader ----------
@@ -551,6 +790,12 @@ function closeReader(){
   const r = $('#reader'); r.hidden = true; r.innerHTML = ''; document.body.style.overflow = ''; S.readerHash = null;
   history.replaceState(null,'','#'+S.view);
 }
+// One source per line ("Publisher, title — https://…"); web addresses become links
+function fmtSources(s){
+  const lines = String(s).split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const link = l => esc(l).replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}</a>`);
+  return lines.length > 1 ? `<ol>${lines.map(l => `<li>${link(l)}</li>`).join('')}</ol>` : link(lines[0] || '');
+}
 function openNews(id){
   const n = S.news.find(x=>x.id===id); if (!n) return;
   openReader(`<div class="meta"><span class="sticker status-${esc(n.status)}">${esc(n.status||'Update')}</span><span class="reg">${esc(n.region)}</span>${sampleTag(n)}</div>
@@ -558,7 +803,7 @@ function openNews(id){
     <div class="byline"><span>By ${esc(n.author||'Nuqta Desk')}</span><span>${fmtDate(n.ts)}, ${fmtTime(n.ts)}</span></div>
     ${n.why ? `<div class="r-why"><span class="mono">Why it matters</span>${esc(n.why)}</div>` : ''}
     ${n.body ? `<div class="r-body">${richBody(n.body)}</div>` : ''}
-    ${n.sources ? `<div class="r-why" style="border-style:solid"><span class="mono" style="color:var(--blue)">Sources</span>${esc(n.sources)}</div>` : ''}
+    ${n.sources ? `<div class="r-why r-sources"><span class="mono" style="color:var(--blue)">Sources</span>${fmtSources(n.sources)}</div>` : ''}
     <div class="r-more"><button class="btn blue" data-act="go-wall">Discuss on the open wall →</button></div>`, 'news-'+id);
 }
 function articleHtml(a){
@@ -655,6 +900,23 @@ async function addPost({space, ref, text, anon, parent=null, errKey}){
   if (error) { S.errs[errKey] = friendly(error); render(); const ta = errKey==='reply' ? $('#reply-ta') : document.getElementById(errKey); if (ta) ta.value = text; return false; }
   delete S.errs[errKey]; await loadPosts(); render(); return true;
 }
+// Members' own articles: save as a draft or send for review (new, or an existing draft / sent-back piece)
+async function saveSubmission(status){
+  const data = {title:val('s-title'), nuqta:val('s-nuqta'), dek:val('s-dek'), section:val('s-section'), author:val('s-author'), body:val('s-body'), status};
+  if (status === 'draft' && !data.title) data.title = 'Untitled draft';
+  if (status === 'draft' && !data.nuqta) data.nuqta = '(nuqta to come)';
+  if (status === 'draft' && !data.body) data.body = ' ';
+  S.savingDraft = status === 'draft';
+  const r = S.editDraft
+    ? await sb.from('articles').update({...data, editor_note:''}).eq('id', S.editDraft).select('id')
+    : await sb.from('articles').insert({...data, submitted_by:S.me.id}).select('id');
+  S.savingDraft = false;
+  if (r.error) { S.errs.submit = friendly(r.error); render(); return false; }
+  delete S.errs.submit;
+  if (status === 'draft') { S.editDraft = r.data?.[0]?.id || S.editDraft; toast('Draft saved. Only you can see it.'); }
+  else { S.editDraft = null; toast('Sent for review. Track it in your dashboard.'); }
+  return true;
+}
 async function deskArticleData(){
   const symv = val('a-symbol');
   return {title:val('a-title'), nuqta:val('a-nuqta'), dek:val('a-dek'), section:val('a-section'), author:val('a-author'), body:val('a-body'), symbol: symv==='auto'?'':symv, featured: $('#a-feat').checked};
@@ -664,10 +926,15 @@ async function onSubmit(form){
   const btn = form.querySelector('button[type=submit]'); if (btn) btn.disabled = true;
   let ok = false;
   if (form.id === 'f-submit') {
-    const data = {title:val('s-title'), nuqta:val('s-nuqta'), dek:val('s-dek'), section:val('s-section'), author:val('s-author'), body:val('s-body'), status:'pending', submitted_by:S.me.id};
-    const { error } = await sb.from('articles').insert(data);
-    if (error) { S.errs.submit = friendly(error); render(); return; }
-    delete S.errs.submit; toast('Sent for review. Track it under My submissions.'); ok = true;
+    ok = await saveSubmission('pending');
+  } else if (form.id === 'f-nuqta') {
+    const id = val('ln-article'), text = val('ln-text');
+    ok = await act(async () => {
+      const r1 = await sb.from('articles').update({featured:false}).eq('featured', true).neq('id', id); if (r1.error) throw r1.error;
+      const r2 = await sb.from('articles').update({featured:true, nuqta:text}).eq('id', id); if (r2.error) throw r2.error;
+    }, 'Latest Nuqta updated.');
+  } else if (form.id === 'f-name2') {
+    ok = await act(() => sb.from('profiles').update({display_name: val('au-name2')}).eq('id', S.me.id), 'Name saved.');
   } else if (form.id === 'f-news') {
     const data = {title:val('n-title'), dek:val('n-dek'), why:val('n-why'), region:val('n-region'), status:val('n-status'), author:val('n-author')||'Nuqta Desk', body:val('n-body'), sources:val('n-sources')};
     const prev = S.editId;
@@ -698,14 +965,33 @@ async function onSubmit(form){
 const TABLE = {news:'news', article:'articles', prompt:'prompts'};
 document.addEventListener('click', async e => {
   if (S.calOpen && !e.target.closest('.cal-wrap')) { S.calOpen = false; render(); }
+  if (S.mention && !e.target.closest('.mention-pop')) closeMention();
   if (e.target.id === 'auth') { closeAuth(); return; }
   const el = e.target.closest('[data-act]'); if (!el || el.tagName === 'SELECT') return;
+  if (el.closest('#guide-pop')) hideGuidePop();
   if (e.target.closest('details')) return;
   const a = el.dataset.act, id = el.dataset.id;
   if (!['del-post','desk-del','del-samples','withdraw'].includes(a)) S.armed = null;
   switch (a) {
     case 'nav': closeAuth(); go(el.dataset.view); break;
-    case 'account': openAuth(S.me.id ? 'account' : 'signin'); break;
+    case 'account': if (S.me.id) go('me'); else openAuth('signin'); break;
+    case 'dash-tab': S.dashTab = el.dataset.t; render(); break;
+    case 'guide-pop-close': break; // already hidden above
+    case 'copy-email': try { await navigator.clipboard.writeText(SUPPORT_EMAIL); toast('Email copied.'); } catch { toast('Our email: ' + SUPPORT_EMAIL); } break;
+    case 'goto-post':
+      if (el.dataset.space === 'article') { S.layer = 'pieces'; S.thread = el.dataset.ref; }
+      else { S.layer = 'open'; S.floorTab = el.dataset.space === 'prompt' ? 'prompt' : 'wall'; S.promptId = el.dataset.space === 'prompt' ? el.dataset.ref : null; }
+      go('forum'); break;
+    case 'new-draft': S.editDraft = null; delete S.errs.submit; if (S.view === 'write') { render(); window.scrollTo({top:0, behavior:'smooth'}); } else go('write'); break;
+    case 'edit-draft': S.editDraft = id; delete S.errs.submit; if (S.view === 'write') { render(); window.scrollTo({top:0, behavior:'smooth'}); } else go('write'); break;
+    case 'save-draft': el.disabled = true; if (await saveSubmission('draft')) await refresh(); else el.disabled = false; break;
+    case 'mention-pick': {
+      const m = S.mention; if (!m) break;
+      const ta = m.ta, end = ta.selectionStart, tag = '@' + tagOf(el.dataset.name) + ' ';
+      ta.value = ta.value.slice(0, m.start) + tag + ta.value.slice(end);
+      const pos = m.start + tag.length; closeMention(); ta.focus(); ta.setSelectionRange(pos, pos);
+      if (ta.id === 'reply-ta') S.replyDraft = ta.value;
+      break; }
     case 'auth': openAuth(el.dataset.mode); break;
     case 'auth-close': closeAuth(); break;
     case 'signout': await sb.auth.signOut(); closeAuth(); toast('Signed out.'); break;
@@ -731,8 +1017,28 @@ document.addEventListener('click', async e => {
     case 'post': { const f = el.dataset.for; el.disabled = true;
       if (await addPost({space:el.dataset.space, ref:el.dataset.ref, text:document.getElementById(f).value, anon:document.getElementById(f+'-anon').checked, errKey:f})) toast('Posted.');
       break; }
-    case 'reply': S.replyTo = S.replyTo === el.dataset.key ? null : el.dataset.key; S.replyDraft = ''; delete S.errs.reply; render(); $('#reply-ta')?.focus(); break;
+    case 'reply': {
+      const same = S.replyTo === el.dataset.key && !el.dataset.tag;
+      S.replyTo = same ? null : el.dataset.key; S.replyDraft = el.dataset.tag ? '@' + el.dataset.tag + ' ' : ''; delete S.errs.reply; render();
+      const ta = $('#reply-ta'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      break; }
     case 'reply-cancel': S.replyTo = null; render(); break;
+    case 'edit-post': {
+      S.editPost = el.dataset.key; delete S.errs.edit; render();
+      const ta = $('#edit-ta'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      break; }
+    case 'edit-cancel': S.editPost = null; delete S.errs.edit; render(); break;
+    case 'edit-save': {
+      const text = ($('#edit-ta')?.value || '').trim(); const k = el.dataset.key;
+      if (!text) { S.errs.edit = 'A post cannot be empty. Use Delete instead.'; render(); break; }
+      el.disabled = true;
+      const { data, error } = await sb.from('posts').update({body: text}).eq('id', k).select('id');
+      if (error || !data?.length) {
+        S.errs.edit = error ? friendly(error) : 'Editing needs the latest database update. Run migration-002.sql in Supabase.';
+        render(); const ta = $('#edit-ta'); if (ta) ta.value = text; break;
+      }
+      S.editPost = null; delete S.errs.edit; await loadPosts(); render(); toast('Post updated.');
+      break; }
     case 'post-reply': { const k = el.dataset.key; S.replyDraft = $('#reply-ta').value; el.disabled = true;
       if (await addPost({space:el.dataset.space, ref:el.dataset.ref, text:S.replyDraft, anon:$('#reply-anon').checked, parent:k, errKey:'reply'})) { S.replyTo = null; S.replyDraft = ''; render(); toast('Reply posted.'); }
       break; }
@@ -797,8 +1103,46 @@ document.addEventListener('change', async e => {
   }
 });
 const confirmMany = false; // set to true to allow more than three editors
-document.addEventListener('input', e => { if (e.target.id === 'reply-ta') S.replyDraft = e.target.value; });
+document.addEventListener('input', e => {
+  if (e.target.id === 'reply-ta') S.replyDraft = e.target.value;
+  if (e.target.id === 'ln-text') { const p = $('#ln-preview'); if (p) p.textContent = e.target.value; }
+  if (e.target.dataset.mention) mentionCheck(e.target);
+});
+document.addEventListener('change', e => {
+  if (e.target.id !== 'ln-article') return;
+  const a = S.articles.find(x => x.id === e.target.value); const ta = $('#ln-text');
+  if (a && ta) { ta.value = a.nuqta; $('#ln-preview').textContent = a.nuqta; }
+});
+// @-tag suggestions while typing in a post or reply box
+function closeMention(){ document.querySelectorAll('.mention-pop').forEach(x => x.remove()); S.mention = null; }
+function mentionCheck(ta){
+  closeMention();
+  const before = ta.value.slice(0, ta.selectionStart);
+  const m = before.match(/(^|\s)@([\w؀-ۿ]{0,30})$/);
+  if (!m) return;
+  const q = m[2].toLowerCase().replace(/_/g, ' ');
+  const hits = S.profilesList.filter(p => p.id !== S.me.id && p.display_name.toLowerCase().includes(q)).slice(0, 6);
+  if (!hits.length) return;
+  const pop = document.createElement('div'); pop.className = 'mention-pop'; pop.setAttribute('role', 'listbox');
+  pop.innerHTML = `<span class="mention-h">Tag someone</span>` + hits.map(p => `<button type="button" role="option" data-act="mention-pick" data-name="${esc(p.display_name)}">${sym('user')} ${esc(p.display_name)}</button>`).join('');
+  ta.parentElement.appendChild(pop);
+  S.mention = {ta, start: before.length - m[2].length - 1};
+}
+document.addEventListener('keydown', e => {
+  if (!S.mention) return;
+  if (e.key === 'Escape') { closeMention(); e.stopPropagation(); }
+  if (e.key === 'Enter' || e.key === 'Tab') { const first = document.querySelector('.mention-pop button'); if (first) { e.preventDefault(); first.click(); } }
+}, true);
 document.addEventListener('submit', e => { e.preventDefault(); onSubmit(e.target); });
+
+// ---------- visitor welcome popup (once per visit, only when signed out) ----------
+const POP_KEY = 'nuqta-guide-pop-seen';
+function hideGuidePop(){ $('#guide-pop').hidden = true; try { sessionStorage.setItem(POP_KEY, '1'); } catch {} }
+function maybeGuidePop(){
+  let seen = false; try { seen = sessionStorage.getItem(POP_KEY) === '1'; } catch {}
+  if (seen || S.me.id || S.view === 'about') return;
+  setTimeout(() => { if (!S.me.id && S.view !== 'about' && !S.authMode) $('#guide-pop').hidden = false; }, 2500);
+}
 
 // ---------- boot ----------
 function setStatus(t){ $('#status').textContent = t; }
@@ -811,9 +1155,10 @@ function maybeHash(){
 }
 async function boot(){
   const h = (location.hash||'').slice(1);
-  const map = {news:'news', articles:'articles', forum:'forum', write:'write', newsroom:'newsroom'};
+  const map = {news:'news', articles:'articles', forum:'forum', write:'write', newsroom:'newsroom', me:'me', about:'about', guide:'about'};
   if (map[h]) S.view = map[h]; else if (h.startsWith('read-')) S.view = 'articles';
   render();
+  initTicker();
   if (!sb) { $('#setup').hidden = false; S.loaded = true; setStatus('Database not connected.'); render(); return; }
   sb.auth.onAuthStateChange((event, session) => {
     const changed = (session?.user?.id || null) !== (S.session?.user?.id || null);
@@ -824,6 +1169,7 @@ async function boot(){
   const { data } = await sb.auth.getSession();
   S.session = data.session;
   await refresh();
+  maybeGuidePop();
   // keep The Floor fresh while someone is reading it
   setInterval(async () => {
     const typing = [...document.querySelectorAll('#view textarea')].some(t => t.value.trim());

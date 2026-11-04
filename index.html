@@ -7,7 +7,7 @@
 <meta name="description" content="Nuqta (نقطہ): a student-led publication on politics, culture, current affairs and the world around us.">
 <meta property="og:title" content="Nuqta">
 <meta property="og:description" content="Your doom scroll for politics, culture, current affairs and the world around.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%231f3ff0' stroke-width='4'%3E%3Cpath d='M24 17V5M18 11l6-6 6 6M31 24h12M37 18l6 6-6 6M24 31v12M18 37l6 6 6-6M17 24H5M11 18l-6 6 6 6'/%3E%3C/g%3E%3Ccircle cx='24' cy='24' r='5' fill='%23121216'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cg fill='none' stroke='%231f3ff0' stroke-width='5' stroke-linejoin='miter'%3E%3Cpath d='M16 12l8-8 8 8M36 16l8 8-8 8M32 36l-8 8-8-8M12 32l-8-8 8-8'/%3E%3C/g%3E%3Ccircle cx='24' cy='24' r='7.5' fill='%23121216'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Caveat:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,700;1,6..72,400&family=Noto+Nastaliq+Urdu:wght@600&display=swap">
@@ -19,9 +19,10 @@
 <header class="top">
   <div class="wrap top-in">
     <button class="brand" data-act="nav" data-view="news" aria-label="Nuqta home">
-      <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="#1f3ff0" stroke-width="4" stroke-linecap="square"><path d="M24 17V5M18 11l6-6 6 6"/><path d="M31 24h12M37 18l6 6-6 6"/><path d="M24 31v12M18 37l6 6 6-6"/><path d="M17 24H5M11 18l-6 6 6 6"/></g><circle cx="24" cy="24" r="5" fill="#121216"/></svg>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="#1f3ff0" stroke-width="5" stroke-linejoin="miter"><path d="M16 12l8-8 8 8"/><path d="M36 16l8 8-8 8"/><path d="M32 36l-8 8-8-8"/><path d="M12 32l-8-8 8-8"/></g><circle cx="24" cy="24" r="7.5" fill="#121216"/></svg>
       <span class="brand-words"><span class="brand-name">NUQTA</span><span class="brand-ur" lang="ur">نقطہ</span></span>
     </button>
+    <button class="dashbtn" id="dashbtn" data-act="nav" data-view="me" hidden><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" aria-hidden="true"><rect x="6" y="6" width="15" height="15"/><rect x="27" y="6" width="15" height="9"/><rect x="27" y="21" width="15" height="21"/><rect x="6" y="27" width="15" height="15"/></svg><span>My dashboard</span></button>
     <nav class="nav" aria-label="Sections" id="nav">
       <button data-act="nav" data-view="news">Current Affairs</button>
       <button data-act="nav" data-view="articles">Articles</button>
@@ -30,10 +31,11 @@
     <button class="acct" id="acct" data-act="account"><span><b>Sign in</b><span class="role">or create an account</span></span></button>
   </div>
 </header>
-<div class="ticker" aria-label="Latest headlines">
+<div class="ticker" id="ticker-wrap" aria-label="Latest headlines" title="Hover to pause · click a headline to read it · hold down to speed up">
   <div class="ticker-in">
     <div class="ticker-label"><span class="dot live" style="background:#fff"></span>LIVE DESK</div>
-    <div class="ticker-track" id="ticker"><span>Loading the latest from the desk</span></div>
+    <div class="ticker-view"><div class="ticker-track" id="ticker"><span>Loading the latest from the desk</span></div></div>
+    <span class="ticker-hint" aria-hidden="true">Hold to speed up »</span>
   </div>
 </div>
 
@@ -41,18 +43,31 @@
 
 <footer id="join">
   <div class="wrap cols4">
-    <div><h4>New to Nuqta?</h4><p><strong>Current Affairs</strong> is the daily news. <strong>Articles</strong> are opinion pieces by our writers. <strong>The Floor</strong> is where readers discuss both.</p></div>
-    <div><h4>Create an account</h4><ol><li>Tap <strong>Create account</strong> below.</li><li>Confirm your email from the link we send.</li><li>Sign in. You can now post, vote and submit articles.</li></ol><button class="fl" data-act="auth" data-mode="signup">Create account</button></div>
+    <div id="foot-new"><h4>New to Nuqta?</h4><p><strong>Current Affairs</strong> is the daily news. <strong>Articles</strong> are opinion pieces by our writers. <strong>The Floor</strong> is where readers discuss both.</p></div>
+    <div id="foot-join"><h4>Create an account</h4><ol><li>Tap <strong>Create account</strong> below.</li><li>Confirm your email from the link we send.</li><li>Sign in. You can now post, vote and submit articles.</li></ol><button class="fl" data-act="auth" data-mode="signup">Create account</button></div>
+    <div id="foot-me" hidden><h4>Your space</h4><p>Your posts, the posts you dotted, where you were tagged, and your article drafts, all in one place.</p><button class="fl" data-act="nav" data-view="me">Open your dashboard</button></div>
     <div><h4>Write for Nuqta</h4><p>Anyone with an account can send in an article. An editor reviews it before it goes live.</p><button class="fl" data-act="nav" data-view="write">Submit an article</button></div>
     <div><h4>House rules</h4><p>Argue with the idea, not the person. Abusive language is blocked automatically, and posts reported by three readers are hidden until an editor reviews them.</p><button class="fl" data-act="nav" data-view="newsroom" id="foot-ed" hidden>Editors' newsroom</button></div>
   </div>
-  <div class="wrap base"><span>NUQTA <span class="ur" lang="ur">نقطہ</span> · Student-led publications club</span><span id="status">Connecting…</span></div>
+  <div class="wrap base"><span>NUQTA <span class="ur" lang="ur">نقطہ</span> · Student-led publications club</span><button class="fl about-btn" data-act="nav" data-view="about">About Nuqta &amp; user guide</button><span id="status">Connecting…</span></div>
 </footer>
+
+<nav class="tabbar" id="tabbar" aria-label="Sections">
+  <button data-act="nav" data-view="news"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="24" r="18"/><path d="M6 24h36M24 6c6 6 6 30 0 36M24 6c-6 6-6 30 0 36"/></svg><span>News</span></button>
+  <button data-act="nav" data-view="articles"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M40 6C26 8 16 18 12 34l-4 8"/><path d="M40 6c0 12-8 24-22 26M18 24l10 1M22 17l8 1"/></svg><span>Articles</span></button>
+  <button data-act="nav" data-view="forum"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10h36v22H22l-10 8v-8H6z"/></svg><span>Floor</span></button>
+  <button data-act="account" data-view="me"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="16" r="8"/><path d="M8 42c2-9 8-13 16-13s14 4 16 13"/></svg><span id="tab-me">Sign in</span></button>
+</nav>
 
 <div id="reader" class="reader" hidden></div>
 <div id="auth" class="modal" hidden></div>
 <div class="wipe" id="wipe" aria-hidden="true"><i></i><i></i><i></i></div>
 <div id="toast" class="toast" hidden role="status"></div>
+<aside id="guide-pop" class="guide-pop" hidden aria-label="Welcome">
+  <button class="gp-x" data-act="guide-pop-close" aria-label="Close">✕</button>
+  <p class="gp-h">New to Nuqta?</p>
+  <p><button class="gp-link" data-act="auth" data-mode="signin">Sign in</button> to post, vote and write for us, or <button class="gp-link" data-act="nav" data-view="about">explore the user guide</button>.</p>
+</aside>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
