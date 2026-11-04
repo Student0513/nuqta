@@ -21,6 +21,23 @@ img{max-width:100%}
 .team select{border:1.5px solid var(--ink);background:var(--paper);padding:4px 6px;font-family:var(--f-mono);font-size:12px}
 .post.hiddenpost{opacity:.6}
 
+/* Header spans the full window, so the logo and menu sit near the edges */
+.top .wrap{max-width:none;padding-left:max(28px,env(safe-area-inset-left,0px));padding-right:max(28px,env(safe-area-inset-right,0px))}
+
+/* Question of the week: question on the left, live numbers and a call to answer on the right */
+.prompt-card{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(240px,1fr);gap:30px;align-items:stretch;padding:28px 28px 26px}
+.pc-main{position:relative;min-width:0}
+.prompt-card h3{max-width:none}
+.prompt-card p{max-width:60ch}
+.pc-side{position:relative;display:flex;flex-direction:column;justify-content:space-between;gap:18px;border-left:2px dashed rgba(255,255,255,.35);padding-left:28px;min-width:0}
+.pc-q{position:absolute;right:-8px;top:-46px;font-family:var(--f-display);font-size:250px;line-height:1;color:transparent;-webkit-text-stroke:2px rgba(255,255,255,.28);pointer-events:none;user-select:none}
+.pc-stats{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:auto}
+.pc-stats div{background:rgba(0,0,0,.24);padding:10px 12px}
+.pc-stats b{display:block;font-family:var(--f-display);font-weight:400;font-size:34px;line-height:1}
+.pc-stats span{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
+.prompt-card .pc-cta{position:relative;align-self:flex-start;background:#fff;color:var(--ink);border-color:#fff;box-shadow:4px 4px 0 var(--ink)}
+.prompt-card .pc-cta:hover{box-shadow:6px 6px 0 var(--ink)}
+
 /* Sources list under a story */
 .r-sources{border-style:solid}
 .r-sources ol{margin:4px 0 0;padding-left:20px;display:grid;gap:6px;font-size:15px;line-height:1.45}
@@ -189,8 +206,15 @@ footer .cols4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
   .idx button{flex:none;width:72%;border-bottom:0;border-right:1.5px solid var(--line);scroll-snap-align:start}
   .subtabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
   .subtabs button{flex:none;padding:10px 12px;font-size:11px}
-  .prompt-card{padding:20px 16px 18px}
+  .prompt-card{padding:20px 16px 18px;grid-template-columns:minmax(0,1fr);gap:16px}
   .prompt-card h3{font-size:28px}
+  .pc-side{border-left:0;border-top:2px dashed rgba(255,255,255,.35);padding-left:0;padding-top:16px}
+  .pc-q{display:none}
+  .pc-stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .pc-stats div{padding:8px}
+  .pc-stats b{font-size:24px}
+  .pc-stats span{font-size:9px}
+  .top .wrap{padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px))}
   .post{padding:12px 12px 8px}
   .thread-head{padding:14px}
   .thread-head h3{font-size:24px}

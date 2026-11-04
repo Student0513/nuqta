@@ -436,10 +436,25 @@ function viewOpen(){
       const isPast = ap && shown.id !== ap.id;
       const daysLeft = Math.max(0, Math.round((keyToDate(addDays(mondayOf(todayKey()),7)) - keyToDate(todayKey()))/864e5));
       const ps = postsFor('prompt', shown.id);
+      const voices = new Set(ps.map(p => p.uid || p.id)).size;
+      const stances = ps.filter(p => !p.parent).length;
       body = `<div class="prompt-card slap"><div class="halftone"></div>
-        <div class="row"><span class="sticker red">${isPast?'Past question':'This week'}</span><span class="mono">Week of ${fmtDate(keyToDate(shown.week))}</span></div>
-        <h3>${esc(shown.question)}</h3>${shown.context ? `<p>${esc(shown.context)}</p>` : ''}
-        <div class="row" style="margin-top:14px"><span class="count"><b>${ps.length}</b> answers</span>${isPast?`<button class="btn" style="background:#fff;color:var(--ink);border-color:#fff" data-act="prompt-now">Back to this week</button>`:`<span class="count">New question in <b>${daysLeft}</b> ${daysLeft===1?'day':'days'}</span>`}</div>
+        <div class="pc-main">
+          <div class="row"><span class="sticker red">${isPast?'Past question':'This week'}</span><span class="mono">Week of ${fmtDate(keyToDate(shown.week))}</span></div>
+          <h3>${esc(shown.question)}</h3>${shown.context ? `<p>${esc(shown.context)}</p>` : ''}
+        </div>
+        <aside class="pc-side" aria-label="About this question">
+          <span class="pc-q" aria-hidden="true">?</span>
+          <div class="pc-stats">
+            <div><b>${stances}</b><span>${stances === 1 ? 'answer' : 'answers'}</span></div>
+            <div><b>${ps.length - stances}</b><span>${ps.length - stances === 1 ? 'reply' : 'replies'}</span></div>
+            <div><b>${voices}</b><span>${voices === 1 ? 'voice' : 'voices'}</span></div>
+            ${isPast ? '' : `<div><b>${daysLeft}</b><span>${daysLeft === 1 ? 'day left' : 'days left'}</span></div>`}
+          </div>
+          ${isPast
+            ? `<button class="btn pc-cta" data-act="prompt-now">Back to this week</button>`
+            : `<button class="btn pc-cta" data-act="answer-prompt">${ps.length ? 'Add your answer ↓' : 'Be the first to answer ↓'}</button>`}
+        </aside>
       </div>
       ${composer('prompt', shown.id, 'Your answer, in your own words…')}
       ${postList(ps, 'No answers yet. Be the first to take a side.')}`;
@@ -1010,6 +1025,10 @@ document.addEventListener('click', async e => {
     case 'floortab': S.floorTab = el.dataset.t; S.promptId = null; S.replyTo = null; render(); break;
     case 'open-prompt': S.promptId = id; S.floorTab = 'prompt'; render(); break;
     case 'prompt-now': S.promptId = null; render(); break;
+    case 'answer-prompt': {
+      const box = $('.composer textarea') || $('.composer');
+      if (box) { box.scrollIntoView({behavior:'smooth', block:'center'}); if (box.focus) setTimeout(() => box.focus({preventScroll:true}), 350); }
+      break; }
     case 'go-prompt': S.layer = 'open'; S.floorTab = 'prompt'; S.promptId = null; go('forum'); break;
     case 'go-wall': S.layer = 'open'; S.floorTab = 'wall'; go('forum'); break;
     case 'go-thread': S.layer = 'pieces'; S.thread = id; go('forum'); break;
