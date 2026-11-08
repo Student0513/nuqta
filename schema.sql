@@ -267,8 +267,14 @@ create policy blocked_words_editors on public.blocked_words for all to authentic
 -- and turn everything that is not a letter (any script) into spaces.
 create or replace function public.nuqta_normalise(t text) returns text
 language sql immutable as $$
+  with s as (
+    select translate(lower(coalesce(t, '')), '@40!1|35$7', 'aaoiiiesst') as v
+  ), c as (
+    select u.ch, u.i, lag(u.ch, 1) over (order by u.i) as p1, lag(u.ch, 2) over (order by u.i) as p2
+    from s, unnest(string_to_array(s.v, null)) with ordinality as u(ch, i)
+  )
   select ' ' || regexp_replace(
-           regexp_replace(translate(lower(coalesce(t, '')), '@40!1|35$7', 'aaoiiiesst'), '(.)\1{2,}', '\1\1', 'g'),
+           coalesce((select string_agg(ch, '' order by i) from c where not coalesce(ch = p1 and ch = p2, false)), ''),
            '[^[:alpha:]]+', ' ', 'g') || ' '
 $$;
 
