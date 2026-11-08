@@ -1,6 +1,10 @@
 /* Base reset (the page used to get these from its claude.ai host) */
 [hidden]{display:none!important}
-body{margin:0;min-height:100vh}
+/* Short pages still fill the window, so the footer always sits at the bottom */
+html{background:var(--paper)}
+body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
+#view{flex:1 0 auto}
+footer{flex-shrink:0}
 img{max-width:100%}
 
 /* Sign-in dialog, account menu and setup notice */
