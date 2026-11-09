@@ -242,7 +242,10 @@ function renderChrome(){
   const signed = !!S.me.id;
   $('#foot-new').hidden = signed; $('#foot-join').hidden = signed; $('#foot-me').hidden = !signed;
   $('#dashbtn').hidden = !signed;
-  if (signed) $('#guide-pop').hidden = true; $('#dashbtn').setAttribute('aria-current', S.view === 'me' ? 'page' : 'false');
+  if (signed) $('#guide-pop').hidden = true;
+  $('#dashbtn').setAttribute('aria-current', S.view === 'me' ? 'page' : 'false');
+  const em = $('#edbtn-m'); em.hidden = !isEditor(); em.setAttribute('aria-current', S.view === 'newsroom' ? 'page' : 'false');
+  em.textContent = 'Newsroom' + (q ? ` (${q})` : '');
   $('#foot-ed').hidden = !isEditor();
   const roleLabel = {owner:'Owner', editor:'Editor', member:'Member', banned:'Suspended'}[S.me.role] || '';
   $('#acct').innerHTML = S.me.id
@@ -261,8 +264,9 @@ function render(){
 
 // ---------- CURRENT AFFAIRS ----------
 function viewNews(){
-  const lead = S.news[0];
-  const brief = S.news.filter(n => dayKey(n.ts) === (lead ? dayKey(lead.ts) : todayKey())).slice(0,5);
+  // Top story: the one editors pinned, otherwise the newest. The Brief lists the latest others.
+  const lead = S.news.find(n => n.pinned) || S.news[0];
+  const brief = S.news.filter(n => n !== lead).slice(0,5);
   const latestArt = latestNuqta();
   const now = new Date();
   const items = S.news.filter(n => (!S.day || dayKey(n.ts) === S.day) && (S.region === 'All' || n.region === S.region));
@@ -288,7 +292,7 @@ function viewNews(){
       </div>
       <div>
         <div class="brief slap" style="--i:5"><span class="tape"></span><h3>The Brief</h3>
-          ${brief.length ? `<ol>${brief.map(n=>`<li><button data-act="open-news" data-id="${esc(n.id)}">${esc(n.title)}<span class="when">${esc(n.region)} · ${fmtTime(n.ts)}</span></button></li>`).join('')}</ol>`
+          ${brief.length ? `<ol>${brief.map(n=>`<li><button data-act="open-news" data-id="${esc(n.id)}">${esc(n.title)}<span class="when">${esc(n.region)} · ${esc(dayLabel(dayKey(n.ts)))}</span></button></li>`).join('')}</ol>`
             : `<p style="padding:6px 0 10px 28px;color:var(--muted);font-style:italic">Five things to know before chai, once the day's stories are in.</p>`}
         </div>
         ${latestArt ? `<button class="nuqta-sticker slap" style="--i:7" data-act="open-article" data-id="${esc(latestArt.id)}"><span class="ring"><span class="dot live"></span></span><span><span class="big">LATEST NUQTA</span><q>${esc(latestArt.nuqta)}</q></span></button>` : ''}
@@ -353,7 +357,6 @@ function viewArticles(){
   const rest = list.filter(a => a !== feat);
   return `<section class="wrap">
     <div class="page-h rise"><h1><span class="blk">ARTICLES</span></h1><p class="tagline">Opinion pieces by Nuqta writers. Each one opens with its <strong>nuqta</strong>: the single point the writer is arguing.</p></div>
-    ${guide('Tap any article to read it, then say whether you agree and join its discussion on The Floor. Want to write one?', `<button class="gx" data-act="nav" data-view="write">Submit an article →</button>`)}
     <div class="filters">
       <div class="chips" role="group" aria-label="Section">${['All',...SECTIONS].map(s => `<button class="chip" data-act="section" data-s="${esc(s)}" aria-pressed="${s===S.section}">${esc(s)}${s!=='All'&&counts[s]?`<span class="n">${counts[s]}</span>`:''}</button>`).join('')}</div>
       <label class="mono" style="display:flex;gap:8px;align-items:center">Writer
@@ -397,7 +400,6 @@ function opCard(a,i){
 function viewForum(){
   return `<section class="wrap">
     <div class="page-h rise"><h1>THE FLOOR</h1><p class="tagline"><strong>Nuqta's discussion forum.</strong> Talk about the articles we publish, or answer the question of the week.</p></div>
-    ${guide(S.me.id ? 'Pick a room below. Post, reply, and <b>dot</b> the posts that made you think. Abusive language is blocked; use Report for anything else.' : 'Anyone can read. To post, reply or dot, you need a free account.', S.me.id ? '' : `<button class="gx" data-act="auth" data-mode="signup">Create an account →</button>`)}
     <div class="seg" role="group" aria-label="Rooms">
       <button data-act="layer" data-l="pieces" aria-pressed="${S.layer==='pieces'}">${sym('quill')} Article discussions</button>
       <button data-act="layer" data-l="open" aria-pressed="${S.layer==='open'}">${sym('megaphone')} Open floor</button>
@@ -454,6 +456,10 @@ function viewOpen(){
           ${isPast
             ? `<button class="btn pc-cta" data-act="prompt-now">Back to this week</button>`
             : `<button class="btn pc-cta" data-act="answer-prompt">${ps.length ? 'Add your answer ↓' : 'Be the first to answer ↓'}</button>`}
+          ${isEditor() ? `<div class="pc-admin"><span>Editors:</span>
+            <button data-act="q-edit" data-id="${esc(shown.id)}">Edit</button>
+            ${isPast ? '' : `<button data-act="q-replace">Replace</button>`}
+            <button data-act="q-del" data-id="${esc(shown.id)}">${S.armed === 'q:' + shown.id ? 'Confirm remove' : 'Remove'}</button></div>` : ''}
         </aside>
       </div>
       ${composer('prompt', shown.id, 'Your answer, in your own words…')}
@@ -550,7 +556,6 @@ function viewWrite(){
   const statusLabel = {draft:'Draft', pending:'In review', published:'Published', rejected:'Sent back'};
   return `<section class="wrap">
     <div class="page-h rise">${sym('quill')}<h1>WRITE FOR US</h1><p class="tagline">Send in an opinion piece. A Nuqta editor reads every submission and publishes it on <strong>Articles</strong> once approved.</p></div>
-    ${guide('1. Write your piece below. 2. An editor reviews it, and may send it back with notes. 3. Once approved it goes live on Articles with your byline.')}
     <div class="cols"><div style="min-width:0">${form}</div>
       <div class="mlist"><h4>My submissions</h4>${S.mySubs.length ? S.mySubs.map(s=>`<div class="mrow"><span class="t">${esc(s.title)}<small>${fmtDate(s.ts)}</small>${s.editor_note?`<span class="quote">Editor's note: ${esc(s.editor_note)}</span>`:''}</span>${subRow(s, statusLabel)}</div>`).join('') : '<p class="help">Nothing written yet.</p>'}</div>
     </div>
@@ -723,7 +728,7 @@ function viewNewsroom(){
       <label>Article<select id="ln-article">${S.articles.map(a => `<option value="${esc(a.id)}" ${cur && cur.id === a.id ? 'selected' : ''}>${esc(a.title)}</option>`).join('')}</select></label>
       <label>The nuqta line<textarea id="ln-text" required maxlength="240">${esc(cur?.nuqta)}</textarea><span class="help">One sentence. It also updates the line at the top of the article.</span></label>
       <div class="row"><button class="btn blue" type="submit">Save Latest Nuqta</button></div></form>
-      <div><h4 class="dash-h">Preview</h4><div class="nuqta-sticker" style="cursor:default"><span class="ring"><span class="dot live"></span></span><span><span class="big">LATEST NUQTA</span><q id="ln-preview">${esc(cur?.nuqta)}</q></span></div></div></div>`
+      <div class="desk-preview"><h4 class="dash-h">Preview</h4><div class="nuqta-sticker" style="cursor:default"><span class="ring"><span class="dot live"></span></span><span><span class="big">LATEST NUQTA</span><q id="ln-preview">${esc(cur?.nuqta)}</q></span></div></div></div>`
       : `<div class="empty"><b>No articles yet</b>Publish an article first. Its nuqta line becomes the Latest Nuqta.</div>`;
   } else if (t === 'news') {
     const n = S.editId ? S.news.find(x=>x.id===S.editId) : null;
@@ -735,7 +740,8 @@ function viewNewsroom(){
       <label>Label<select id="n-status">${STATUSES.map(r=>`<option ${n?.status===r?'selected':''}>${r}</option>`).join('')}</select></label></div>
       <label>Byline<input id="n-author" maxlength="80" placeholder="Nuqta Desk" value="${esc(n?.author)}"></label>
       <label>Full story (optional)<span class="help">Blank line between paragraphs. "> " for a pull quote, "## " for a subheading.</span><textarea id="n-body" class="long">${esc(n?.body)}</textarea></label>
-      <label>Sources<input id="n-sources" maxlength="400" value="${esc(n?.sources)}"></label>
+      <label>Sources<span class="help">One per line: "Publisher, title — https://link". Links become clickable.</span><textarea id="n-sources" maxlength="2000">${esc(n?.sources)}</textarea></label>
+      ${hasPinning() ? `<label class="cb"><input type="checkbox" id="n-pin" ${n?.pinned ? 'checked' : ''}> Make this the Top story on the home page</label>` : ''}
       <div class="row"><button class="btn blue" type="submit">${n?'Save changes':'Publish story'}</button>${n?'<button class="btn ghost" type="button" data-act="desk-cancel">Cancel</button>':''}</div></form>`;
   } else if (t === 'article') {
     const a = S.approving ? S.queue.find(x=>x.id===S.approving) : S.editId ? S.articles.find(x=>x.id===S.editId) : null;
@@ -749,12 +755,12 @@ function viewNewsroom(){
     const p = S.editId ? S.prompts.find(x=>x.id===S.editId) : null;
     const queued = S.prompts.filter(x=>x.week > todayKey()).sort((a,b)=>a.week<b.week?-1:1);
     body = `<div class="cols"><form class="formcard" id="f-prompt"><h3>${p?'Edit question':'Queue a question'}</h3>
-      <p class="help">Each question goes live on the Monday of its week, and last week's moves to Past questions automatically.</p>
+      <p class="help">${p ? 'Editing keeps any answers already posted under this question. To start fresh, remove it and queue a new one.' : 'Each question goes live on the Monday of its week, and last week\'s moves to Past questions automatically. A question queued for this week replaces the current one.'}</p>
       <label>Question<textarea id="p-q" required maxlength="200">${esc(p?.question)}</textarea></label>
       <label>Context (optional)<textarea id="p-ctx" maxlength="500">${esc(p?.context)}</textarea></label>
-      <label>Week starting<input type="date" id="p-week" required value="${esc(p?.week || addDays(mondayOf(todayKey()),7))}"></label>
+      <label>Week starting<input type="date" id="p-week" required value="${esc(p?.week || S.qWeek || addDays(mondayOf(todayKey()),7))}"></label>
       <div class="row"><button class="btn blue" type="submit">${p?'Save changes':'Queue question'}</button>${p?'<button class="btn ghost" type="button" data-act="desk-cancel">Cancel</button>':''}</div></form>
-      <div class="mlist"><h4>Coming up (${queued.length})</h4>${queued.length?queued.map(x=>mrow('prompt',x,x.question,'Week of '+fmtDate(keyToDate(x.week)))).join(''):'<p class="help">Nothing queued. Add next week\'s question.</p>'}</div></div>`;
+      <div class="mlist">${questionLists(queued)}</div></div>`;
   } else if (t === 'mod') {
     body = `<div class="cols"><div class="mlist"><h4>Reported posts</h4><p class="help">Posts with 3 or more reports are already hidden from readers until you decide.</p>${S.reports.length ? S.reports.map(p=>`<div class="mrow"><span class="t">${esc(p.body)}<small>${p.reports} ${p.reports===1?'report':'reports'} · ${ago(ts(p.created_at))} · ${esc(p.profiles?.display_name||'Reader')}${p.anon?' (posted anonymously)':''}${p.hidden?' · hidden':''}</small></span>
         <button class="link danger" data-act="mod-remove" data-key="${esc(p.id)}">Remove post</button><button class="link" data-act="mod-keep" data-key="${esc(p.id)}">Keep</button></div>`).join('') : '<p class="help">No open reports.</p>'}</div>
@@ -771,7 +777,7 @@ function viewNewsroom(){
     const samples = [...S.news,...S.articles,...S.prompts].filter(x=>x.sample).length;
     body = `<div class="mlist">
       ${samples?`<div class="mrow" style="border-color:var(--red)"><span class="t">${samples} sample posts are on the site. Remove them once your own content is in.</span><button class="link danger" data-act="del-samples">${S.armed==='samples'?'Tap again to remove':'Remove samples'}</button></div>`:''}
-      <h4>Stories (${S.news.length})</h4>${S.news.map(x=>mrow('news',x,x.title,fmtDate(x.ts)+' · '+x.region)).join('') || '<p class="help">None yet.</p>'}
+      <h4>Stories (${S.news.length})</h4>${S.news.map(x=>mrow('news',x,x.title,fmtDate(x.ts)+' · '+x.region+(x.pinned?' · TOP STORY':''), hasPinning() && !x.pinned ? `<button class="link" data-act="pin-story" data-id="${esc(x.id)}">Make top story</button>` : '')).join('') || '<p class="help">None yet.</p>'}
       <h4>Articles (${S.articles.length})</h4>${S.articles.map(x=>mrow('article',x,x.title,(x.author||'')+' · '+fmtDate(x.ts))).join('') || '<p class="help">None yet.</p>'}
       <h4>Weekly questions (${S.prompts.length})</h4>${[...S.prompts].sort((a,b)=>a.week<b.week?1:-1).map(x=>mrow('prompt',x,x.question,'Week of '+fmtDate(keyToDate(x.week)))).join('') || '<p class="help">None yet.</p>'}
     </div>`;
@@ -782,10 +788,25 @@ function viewNewsroom(){
     ${body}
   </section>`;
 }
-function mrow(kind, x, title, sub){
+const hasPinning = () => S.news.some(n => 'pinned' in n);
+// Weekly questions for editors and the owner: this week's, the queue, and past ones, each editable/removable
+function qrow(x, tag){
+  const armed = S.armed === 'q:' + x.id, n = postsFor('prompt', x.id).length;
+  return `<div class="mrow"><span class="t">${esc(x.question)}<small>${tag ? `<span class="pill approved" style="margin-right:6px">${tag}</span>` : ''}Week of ${fmtDate(keyToDate(x.week))} · ${n} ${n === 1 ? 'answer' : 'answers'}</small></span>
+    <button class="link" data-act="q-edit" data-id="${esc(x.id)}">Edit</button>
+    <button class="link danger" data-act="q-del" data-id="${esc(x.id)}">${armed ? (n ? 'Confirm: hides ' + n + ' answers' : 'Confirm') : 'Remove'}</button></div>`;
+}
+function questionLists(queued){
+  const cur = activePrompt();
+  const past = S.prompts.filter(x => x.week && x.week <= todayKey() && (!cur || x.id !== cur.id)).sort((a,b) => a.week < b.week ? 1 : -1);
+  return `<h4>This week</h4>${cur ? qrow(cur, 'Live') : '<p class="help">No question is live this week. Queue one for this week\'s Monday to show it now.</p>'}
+    <h4>Coming up (${queued.length})</h4>${queued.length ? queued.map(x => qrow(x)).join('') : '<p class="help">Nothing queued. Add next week\'s question.</p>'}
+    <h4>Past (${past.length})</h4>${past.length ? past.map(x => qrow(x)).join('') : '<p class="help">No past questions yet.</p>'}`;
+}
+function mrow(kind, x, title, sub, extra = ''){
   const armed = S.armed === kind+':'+x.id;
   return `<div class="mrow"><span class="t">${esc(title)}<small>${esc(sub)}${x.sample?' · sample':''}${x.featured?' · featured':''}</small></span>
-    ${isOwner() ? `<button class="link" data-act="desk-edit" data-kind="${kind}" data-id="${esc(x.id)}">Edit</button>
+    ${isOwner() ? `${extra}<button class="link" data-act="desk-edit" data-kind="${kind}" data-id="${esc(x.id)}">Edit</button>
     <button class="link danger" data-act="desk-del" data-kind="${kind}" data-id="${esc(x.id)}">${armed?'Confirm':'Delete'}</button>` : ''}</div>`;
 }
 
@@ -952,8 +973,14 @@ async function onSubmit(form){
     ok = await act(() => sb.from('profiles').update({display_name: val('au-name2')}).eq('id', S.me.id), 'Name saved.');
   } else if (form.id === 'f-news') {
     const data = {title:val('n-title'), dek:val('n-dek'), why:val('n-why'), region:val('n-region'), status:val('n-status'), author:val('n-author')||'Nuqta Desk', body:val('n-body'), sources:val('n-sources')};
+    const pin = !!$('#n-pin')?.checked;
+    if (hasPinning()) data.pinned = pin;
     const prev = S.editId;
-    ok = await act(() => prev ? sb.from('news').update(data).eq('id', prev) : sb.from('news').insert(data), prev ? 'Story updated.' : 'Story published.');
+    ok = await act(async () => {
+      if (pin) { const u = await sb.from('news').update({pinned:false}).eq('pinned', true); if (u.error) throw u.error; }
+      const r = prev ? await sb.from('news').update(data).eq('id', prev) : await sb.from('news').insert(data);
+      if (r.error) throw r.error;
+    }, prev ? 'Story updated.' : 'Story published.');
   } else if (form.id === 'f-article') {
     const data = await deskArticleData();
     if (S.approving) ok = await act(() => sb.from('articles').update({...data, status:'published', published_at:new Date().toISOString(), decided_by:S.me.id, editor_note:''}).eq('id', S.approving), 'Approved and published.');
@@ -963,7 +990,13 @@ async function onSubmit(form){
   } else if (form.id === 'f-prompt') {
     const data = {question:val('p-q'), context:val('p-ctx'), week: mondayOf(val('p-week'))};
     const prev = S.editId;
-    ok = await act(() => prev ? sb.from('prompts').update(data).eq('id', prev) : sb.from('prompts').insert(data), prev ? 'Question updated.' : 'Question queued for ' + fmtDate(keyToDate(data.week)) + '.');
+    ok = await act(async () => {
+      if (!prev) { const r = await sb.from('prompts').insert(data); if (r.error) throw r.error; return; }
+      const r = await sb.from('prompts').update(data).eq('id', prev).select('id');
+      if (r.error) throw r.error;
+      if (!r.data?.length) throw new Error('Editing questions needs the latest database update (migration-004.sql).');
+    }, prev ? 'Question updated.' : data.week <= todayKey() ? 'Question is now live on The Floor.' : 'Question queued for ' + fmtDate(keyToDate(data.week)) + '.');
+    if (ok) S.qWeek = null;
   } else if (form.id === 'f-words') {
     const want = [...new Set(val('w-list').split('\n').map(s=>s.trim().toLowerCase()).filter(s=>s.length>=2 && s.length<=60))];
     const add = want.filter(w=>!S.words.includes(w)), del = S.words.filter(w=>!want.includes(w));
@@ -986,12 +1019,25 @@ document.addEventListener('click', async e => {
   if (el.closest('#guide-pop')) hideGuidePop();
   if (e.target.closest('details')) return;
   const a = el.dataset.act, id = el.dataset.id;
-  if (!['del-post','desk-del','del-samples','withdraw'].includes(a)) S.armed = null;
+  if (!['del-post','desk-del','del-samples','withdraw','q-del'].includes(a)) S.armed = null;
   switch (a) {
     case 'nav': closeAuth(); go(el.dataset.view); break;
     case 'account': if (S.me.id) go('me'); else openAuth('signin'); break;
     case 'dash-tab': S.dashTab = el.dataset.t; render(); break;
     case 'guide-pop-close': break; // already hidden above
+    case 'q-edit': S.deskTab = 'prompt'; S.editId = id; S.qWeek = null; if (S.view === 'newsroom') { render(); window.scrollTo({top:0, behavior:'smooth'}); } else go('newsroom'); break;
+    case 'q-replace': S.deskTab = 'prompt'; S.editId = null; S.qWeek = mondayOf(todayKey()); go('newsroom'); break;
+    case 'q-del': {
+      if (S.armed !== 'q:' + id) { S.armed = 'q:' + id; render(); break; }
+      S.armed = null;
+      if (await act(() => sb.from('prompts').delete().eq('id', id).select('id').then(r => { if (!r.error && !r.data?.length) throw new Error('Removing questions needs the latest database update (migration-004.sql).'); return r; }), 'Question removed.')) { if (S.promptId === id) S.promptId = null; await refresh(); }
+      break; }
+    case 'pin-story':
+      if (await act(async () => {
+        const u = await sb.from('news').update({pinned:false}).eq('pinned', true); if (u.error) throw u.error;
+        const p = await sb.from('news').update({pinned:true}).eq('id', id); if (p.error) throw p.error;
+      }, 'Top story updated.')) refresh();
+      break;
     case 'copy-email': try { await navigator.clipboard.writeText(SUPPORT_EMAIL); toast('Email copied.'); } catch { toast('Our email: ' + SUPPORT_EMAIL); } break;
     case 'goto-post':
       if (el.dataset.space === 'article') { S.layer = 'pieces'; S.thread = el.dataset.ref; }

@@ -41,6 +41,20 @@ img{max-width:100%}
 .pc-stats span{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.85}
 .prompt-card .pc-cta{position:relative;align-self:flex-start;background:#fff;color:var(--ink);border-color:#fff;box-shadow:4px 4px 0 var(--ink)}
 .prompt-card .pc-cta:hover{box-shadow:6px 6px 0 var(--ink)}
+.pc-admin{position:relative;display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.pc-admin span{opacity:.75}
+.pc-admin button{border:1.5px solid rgba(255,255,255,.7);background:transparent;color:#fff;padding:3px 9px;font:inherit;letter-spacing:inherit}
+.pc-admin button:hover{background:#fff;color:var(--blue)}
+
+/* Newsroom shortcut in the phone header (editors only) */
+.edbtn-m{display:none}
+
+/* Forms never grow wider than their column (long article titles in dropdowns) */
+.cols > *{min-width:0}
+.formcard label{min-width:0}
+.formcard input,.formcard select,.formcard textarea{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.formcard select{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+.desk-preview .nuqta-sticker{margin-top:0;transform:none}
 
 /* Sources list under a story */
 .r-sources{border-style:solid}
@@ -152,6 +166,11 @@ footer .cols4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
   .nav,.acct{display:none!important}
   .dashbtn{margin-left:auto;padding:5px 9px;font-size:10px}
   .dashbtn svg{width:14px;height:14px}
+  .edbtn-m{display:inline-flex;align-items:center;border:2px solid var(--red);background:var(--red);color:#fff;padding:5px 9px;font-family:var(--f-mono);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+  .edbtn-m[aria-current="page"]{background:var(--card);color:var(--red)}
+  .dashbtn:not([hidden]) + .edbtn-m{margin-left:0}
+  .edbtn-m:first-of-type{margin-left:auto}
+  .ticker{display:none}
   .tabbar{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;z-index:55;background:var(--ink);padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
   .tabbar button{border:0;background:none;color:rgba(239,233,220,.7);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;font-family:var(--f-mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase}
   .tabbar svg{width:22px;height:22px}

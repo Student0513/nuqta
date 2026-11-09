@@ -22,6 +22,7 @@ The site is plain HTML/CSS/JS, hosted free on **GitHub Pages**. Data and account
    1. [`schema.sql`](schema.sql): tables, security rules and moderation
    2. [`migration-002.sql`](migration-002.sql): drafts, post editing, owner-only moderation
    3. [`migration-003.sql`](migration-003.sql): faster language filter
+   4. [`migration-004.sql`](migration-004.sql): pinned top story; editors can edit and remove weekly questions
 
    Each should say "Success. No rows returned".
 
@@ -73,4 +74,4 @@ Supabase's built-in email sender only allows a few emails an hour. For launch, c
 - `styles.css`, `extra.css`: design
 - `app.js`: all pages and logic
 - `config.js`: your Supabase URL and public key
-- `schema.sql`, `migration-002.sql`, `migration-003.sql`: database setup, run in that order
+- `schema.sql`, `migration-002.sql`, `migration-003.sql`, `migration-004.sql`: database setup, run in that order
