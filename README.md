@@ -1,7 +1,7 @@
 ﻿# Nuqta نقطہ
 
 Student-led publication on politics, culture, current affairs and the world around us.
-Live at **https://student0513.github.io/nuqta/**
+Live at **https://nuqta.today** (domain from Namecheap, pointed at GitHub Pages; the `CNAME` file keeps the custom domain)
 
 - **Current Affairs**: daily news with a calendar and region filter
 - **Articles**: opinion pieces, each led by its *nuqta*, submitted by members and approved by editors
@@ -23,6 +23,7 @@ The site is plain HTML/CSS/JS, hosted free on **GitHub Pages**. Data and account
    2. [`migration-002.sql`](migration-002.sql): drafts, post editing, owner-only moderation
    3. [`migration-003.sql`](migration-003.sql): faster language filter
    4. [`migration-004.sql`](migration-004.sql): pinned top story; editors can edit and remove weekly questions
+   5. `migration-005.sql`: the protected owners. It lists the owners' email addresses, so it's kept on the founders' computer and is not uploaded to this public repository.
 
    Each should say "Success. No rows returned".
 

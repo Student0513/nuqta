@@ -86,7 +86,8 @@ function friendly(err){
   if (m.includes('too_many_links')) return 'Too many links. Keep it to two or fewer.';
   if (m.includes('rate_limited')) return 'You are posting very fast. Take a short break and try again.';
   if (m.includes('too_many_pending')) return 'You already have 5 articles in review. Wait for an editor first.';
-  if (m.includes('only_owner')) return 'Only the site owner can change roles.';
+  if (m.includes('only_owner')) return 'Only owners can change roles.';
+  if (m.includes('owners_are_protected')) return 'Owners are protected. Owner accounts can only be changed in the Supabase SQL Editor.';
   if (m.includes('row-level security') || m.includes('permission denied')) return 'Your account is not allowed to do that.';
   if (m.includes('articles_status_check') || (m.includes('row-level security') && m.includes('articles') && S.savingDraft)) return 'Drafts need the latest database update. Run migration-002.sql in Supabase.';
   if (m.includes('Invalid login credentials')) return 'Email or password is wrong.';
