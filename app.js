@@ -237,7 +237,10 @@ function renderChrome(){
   if (!isEditor() && ed) { ed.remove(); ed = null; }
   if (ed) ed.textContent = 'Newsroom' + (q ? ` (${q})` : '');
   nav.querySelectorAll('button').forEach(b => b.setAttribute('aria-current', b.dataset.view === S.view ? 'page' : 'false'));
-  $('#tabbar').querySelectorAll('button').forEach(b => b.setAttribute('aria-current', b.dataset.view === S.view ? 'page' : 'false'));
+  const tbs = [...$('#tabbar').querySelectorAll('button')], ti = tbs.findIndex(b => b.dataset.view === S.view);
+  tbs.forEach(b => b.setAttribute('aria-current', b.dataset.view === S.view ? 'page' : 'false'));
+  $('#tabbar').classList.toggle('has-active', ti >= 0);
+  if (ti >= 0) $('#tabbar').style.setProperty('--i', ti);
   $('#tab-me').textContent = S.me.id ? 'You' : 'Sign in';
   const signed = !!S.me.id;
   $('#foot-new').hidden = signed; $('#foot-join').hidden = signed; $('#foot-me').hidden = !signed;
@@ -257,8 +260,19 @@ function render(){
   renderChrome(); renderTicker();
   const v = $('#view');
   const fresh = lastView !== S.view; lastView = S.view;
+  // Sideways-scrolling menus keep their position when the page redraws
+  const keep = {}; v.querySelectorAll('.subtabs, .chips, .idx').forEach(el => { const k = el.getAttribute('aria-label'); if (k) keep[k] = el.scrollLeft; });
   v.innerHTML = S.view === 'articles' ? viewArticles() : S.view === 'forum' ? viewForum() : S.view === 'write' ? viewWrite() : S.view === 'newsroom' ? viewNewsroom() : S.view === 'me' ? viewMe() : S.view === 'about' ? viewAbout() : viewNews();
   if (fresh) { v.classList.add('anim'); clearTimeout(render.t); render.t = setTimeout(()=>v.classList.remove('anim'), 1600); }
+  v.querySelectorAll('.subtabs, .chips, .idx').forEach(el => {
+    const k = el.getAttribute('aria-label');
+    if (!fresh && k in keep) el.scrollLeft = keep[k];
+    const on = el.querySelector('[aria-pressed="true"]');
+    if (on && el.scrollWidth > el.clientWidth) {
+      const a = on.offsetLeft - el.offsetLeft, b = a + on.offsetWidth;
+      if (a < el.scrollLeft || b > el.scrollLeft + el.clientWidth) el.scrollLeft = Math.max(0, a - 16);
+    }
+  });
   if (S.replyTo) { const ta = $('#reply-ta'); if (ta) ta.value = S.replyDraft; }
 }
 
@@ -343,7 +357,7 @@ function newsCard(n,i){
     <span class="tape"></span>
     <div class="meta"><span class="sticker status-${esc(n.status)}">${esc(n.status||'Update')}</span><span class="reg">${esc(n.region)}</span>${sampleTag(n)}</div>
     <h3>${esc(n.title)}</h3><p>${esc(n.dek)}</p>
-    ${n.why ? `<details class="why"><summary>Why it matters</summary><p>${esc(n.why)}</p></details>` : ''}
+    ${n.why ? `<details class="why"><summary>Why it matters</summary><div class="why-body"><p>${esc(n.why)}</p></div></details>` : ''}
     <div class="byline"><span>${esc(n.author||'Nuqta Desk')}</span><span>${fmtTime(n.ts)}</span></div>
   </article>`;
 }
@@ -784,7 +798,7 @@ function viewNewsroom(){
   }
   return `<section class="wrap">
     <div class="page-h rise"><h1><span class="blk" style="background:var(--red)">NEWSROOM</span></h1><p class="tagline">Editors only. Approve articles, post the news, set the weekly question and keep The Floor civil.</p></div>
-    <div class="subtabs" role="group" aria-label="Newsroom">${tabs.map(([k,l,n])=>`<button data-act="desk-tab" data-t="${k}" aria-pressed="${t===k}">${l}${n?`<span class="n">${n}</span>`:''}</button>`).join('')}</div>
+    <div class="subtabs desk-tabs" role="group" aria-label="Newsroom">${tabs.map(([k,l,n])=>`<button data-act="desk-tab" data-t="${k}" aria-pressed="${t===k}">${l}${n?`<span class="n">${n}</span>`:''}</button>`).join('')}</div>
     ${body}
   </section>`;
 }
@@ -1193,6 +1207,26 @@ function mentionCheck(ta){
   ta.parentElement.appendChild(pop);
   S.mention = {ta, start: before.length - m[2].length - 1};
 }
+// "Why it matters": slide open and closed instead of snapping
+document.addEventListener('click', e => {
+  const sum = e.target.closest('.why summary'); if (!sum) return;
+  const d = sum.parentElement, body = d.querySelector('.why-body'); if (!body || reduceMotion) return;
+  e.preventDefault();
+  if (d.dataset.busy) return; d.dataset.busy = '1';
+  const done = () => { delete d.dataset.busy; body.style.height = ''; };
+  if (d.open) {
+    d.classList.remove('opening');
+    const anim = body.animate([{height: body.offsetHeight + 'px', opacity: 1}, {height: '0px', opacity: 0}], {duration: 260, easing: 'cubic-bezier(.4,0,.2,1)'});
+    anim.onfinish = () => { d.open = false; done(); };
+    setTimeout(() => { if (anim.playState !== 'finished') anim.finish(); }, 500);
+  } else {
+    d.open = true; d.classList.add('opening');
+    const h = body.offsetHeight;
+    const anim = body.animate([{height: '0px', opacity: 0, transform: 'translateY(-6px)'}, {height: h + 'px', opacity: 1, transform: 'none'}], {duration: 380, easing: 'cubic-bezier(.2,.8,.2,1)'});
+    anim.onfinish = done;
+    setTimeout(() => { if (anim.playState !== 'finished') anim.finish(); }, 600);
+  }
+}, true);
 document.addEventListener('keydown', e => {
   if (!S.mention) return;
   if (e.key === 'Escape') { closeMention(); e.stopPropagation(); }
