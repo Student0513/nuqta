@@ -426,8 +426,11 @@ function viewPieces(){
   if (!S.thread || !S.articles.some(a=>a.id===S.thread)) S.thread = S.articles[0].id;
   const a = S.articles.find(x=>x.id===S.thread);
   return `<div class="pieces">
+    <div class="idx-wrap">
+    ${S.articles.length > 1 ? `<p class="swipe-hint" aria-hidden="true">Slide to browse ${S.articles.length} articles <span class="sh-arrow">→</span></p>` : ''}
     <div class="idx" role="group" aria-label="Choose an article">
       ${S.articles.map(x => `<button data-act="thread" data-id="${esc(x.id)}" aria-pressed="${x.id===S.thread}"><span class="t">${esc(x.title)}</span><span class="s"><span>${esc(x.section)}</span><span>${postsFor('article',x.id).length} comments</span></span></button>`).join('')}
+    </div>
     </div>
     <div style="min-width:0">
       <div class="thread-head"><span class="tape"></span>
@@ -1207,6 +1210,14 @@ function mentionCheck(ta){
   ta.parentElement.appendChild(pop);
   S.mention = {ta, start: before.length - m[2].length - 1};
 }
+// The Floor's article list on phones: once someone slides it, calm the hint; hide the edge fade at the end
+document.addEventListener('scroll', e => {
+  const el = e.target; if (!(el instanceof Element) || !el.matches('.idx')) return;
+  const wrap = el.closest('.idx-wrap'); if (!wrap) return;
+  if (el.scrollLeft > 8) wrap.classList.add('seen');
+  wrap.classList.toggle('at-end', el.scrollLeft + el.clientWidth >= el.scrollWidth - 4);
+}, true);
+
 // "Why it matters": slide open and closed instead of snapping
 document.addEventListener('click', e => {
   const sum = e.target.closest('.why summary'); if (!sum) return;

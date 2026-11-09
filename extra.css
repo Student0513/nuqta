@@ -308,6 +308,17 @@ footer .cols4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
   .tabbar button[aria-current="page"]::after{transform:scale(1)}
   .toast,.guide-pop{bottom:calc(100px + env(safe-area-inset-bottom,0px))}
 
+  /* The Floor: hint above the sliding list of articles */
+  .swipe-hint{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);transition:opacity .4s}
+  .swipe-hint .sh-hand{display:none}
+  .swipe-hint .sh-arrow{display:inline-block;font-size:15px;animation:nudge 1.4s ease-in-out infinite}
+  .idx-wrap.seen .swipe-hint{opacity:.45}
+  .idx-wrap.seen .sh-arrow{animation:none}
+  .idx{position:relative}
+  .idx-wrap{position:relative;min-width:0}
+  .idx-wrap::after{content:"";position:absolute;right:0;bottom:0;width:36px;height:calc(100% - 27px);background:linear-gradient(90deg,transparent,rgba(239,233,220,.95));pointer-events:none;transition:opacity .3s}
+  .idx-wrap.at-end::after{opacity:0}
+
   /* Newsroom: tabs wrap into chips instead of a sliding strip */
   .desk-tabs{flex-wrap:wrap;overflow:visible;gap:6px;border-bottom:0;padding-bottom:4px}
   .desk-tabs button{flex:none;border:1.5px solid var(--ink);background:var(--card);padding:7px 10px;font-size:10px}
@@ -322,4 +333,7 @@ footer .cols4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
   .inline-note input{min-width:0}
 }
 @keyframes barIn{from{transform:translateY(130%)}to{transform:none}}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(6px)}}
+.swipe-hint{display:none}
+@media (max-width:700px){.swipe-hint{display:flex}}
 @media (prefers-reduced-motion:reduce){.tabbar,.tab-ind,.tabbar svg{animation:none!important;transition:none!important}}
